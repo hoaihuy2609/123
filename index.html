@@ -8,11 +8,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- SheetJS (xlsx) CDN for Excel Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- PDF.js CDN for reading PDF in browser -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  </script>
   <style>
     * {
       -webkit-tap-highlight-color: transparent;
@@ -63,8 +58,8 @@
             <span>📥 Xuất Excel</span>
           </button>
 
-          <!-- Settings / Import button -->
-          <button onclick="openImportModal()" class="touch-btn p-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs" title="Cài đặt / Tải PDF">
+          <!-- Settings / Menu button -->
+          <button onclick="openImportModal()" class="touch-btn p-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs" title="Cài đặt / Tùy chọn">
             ⚙️
           </button>
         </div>
@@ -136,18 +131,6 @@
       <!-- Items generated here -->
     </div>
 
-    <!-- Empty State (No file imported yet) -->
-    <div id="empty-state" class="text-center py-10 px-4 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 my-2">
-      <div class="text-3xl mb-1.5">📄</div>
-      <p class="text-slate-800 font-bold text-xs">Chưa có danh sách sinh viên</p>
-      <p class="text-slate-500 text-[11px] mt-0.5 mb-3">Tải file PDF của bạn lên để tự động nhận diện STT, MSSV, Họ và Tên, Lớp.</p>
-      
-      <label class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-xs cursor-pointer active:scale-95 transition-transform">
-        <span>📂 Chọn file PDF</span>
-        <input type="file" accept=".pdf" onchange="handlePDFUpload(this)" class="hidden" />
-      </label>
-    </div>
-
     <!-- Search Not Found State -->
     <div id="not-found-state" class="hidden text-center py-8 text-slate-400 text-xs">
       Không tìm thấy sinh viên phù hợp.
@@ -182,45 +165,25 @@
     </div>
   </div>
 
-  <!-- ================= MODAL: CÀI ĐẶT / NHẬP DỮ LIỆU ================= -->
+  <!-- ================= MODAL: TÙY CHỌN & SAO LƯU ================= -->
   <div id="import-modal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 hidden">
     <div class="bg-white w-full max-w-sm rounded-xl p-4 shadow-lg border border-slate-200 max-h-[85vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-1.5">
-        <h3 class="text-xs font-bold text-slate-900">⚙️ Quản Lý Dữ Liệu</h3>
+        <h3 class="text-xs font-bold text-slate-900">⚙️ Cài Đặt & Quản Lý</h3>
         <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-700 text-sm font-bold p-1">✕</button>
       </div>
 
       <div class="space-y-3">
-        <!-- 1. PDF Upload -->
+        <!-- 1. Reset to original 67 students -->
         <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-          <label class="block text-xs font-bold text-slate-800 mb-1">📄 1. Tải file PDF mới</label>
-          <p class="text-[11px] text-slate-500 mb-2">Tự động lấy: STT, Mã SV, Họ & Tên (gom lại), Mã Lớp.</p>
-          <input 
-            type="file" 
-            accept=".pdf" 
-            onchange="handlePDFUpload(this)"
-            class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[11px] file:font-semibold file:bg-slate-900 file:text-white cursor-pointer"
-          />
-          <div id="pdf-loading" class="hidden text-[11px] text-blue-600 font-semibold mt-1.5">
-            ⏳ Đang đọc và trích xuất dữ liệu từ PDF...
-          </div>
-        </div>
-
-        <!-- 2. Copy/Paste Text -->
-        <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-          <label class="block text-xs font-bold text-slate-800 mb-1">📋 2. Hoặc Dán văn bản</label>
-          <textarea 
-            id="paste-textarea" 
-            rows="3" 
-            placeholder="STT   MSSV   Họ và Tên   Mã Lớp"
-            class="w-full p-2 border border-slate-200 rounded text-xs font-mono focus:outline-none focus:border-slate-800 bg-white"
-          ></textarea>
-          <button onclick="importPastedText()" class="mt-1.5 w-full py-1 bg-slate-800 text-white rounded text-xs font-medium">
-            Nạp danh sách
+          <label class="block text-xs font-bold text-slate-800 mb-1">🔄 Danh sách gốc PDF</label>
+          <p class="text-[11px] text-slate-500 mb-2">Đã tích hợp sẵn 67 sinh viên từ file PDF của cô.</p>
+          <button onclick="resetToOriginalPDF()" class="w-full py-1.5 bg-slate-900 hover:bg-black text-white rounded text-xs font-semibold">
+            Nạp lại 67 sinh viên gốc
           </button>
         </div>
 
-        <!-- 3. Backup / Clear -->
+        <!-- 2. Backup / Restore -->
         <div class="pt-2 border-t border-slate-100 flex flex-col gap-1.5">
           <div class="flex items-center gap-1.5">
             <button onclick="backupJSON()" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium">
@@ -231,8 +194,8 @@
               <input type="file" accept=".json" onchange="restoreJSON(this)" class="hidden" />
             </label>
           </div>
-          <button onclick="confirmResetAll()" class="w-full py-1 text-red-600 hover:bg-red-50 rounded text-xs font-medium border border-red-200">
-            🗑️ Xóa toàn bộ dữ liệu hiện tại
+          <button onclick="clearAllPaymentMarks()" class="w-full py-1 text-amber-700 hover:bg-amber-50 rounded text-xs font-medium border border-amber-200">
+            🧹 Xóa toàn bộ tick & tiền đã thu (giữ nguyên tên)
           </button>
         </div>
       </div>
@@ -241,8 +204,749 @@
 
   <!-- ================= JAVASCRIPT ================= -->
   <script>
-    const STORAGE_KEY = 'book_sales_data_simple_v1';
-    const SETTINGS_KEY = 'book_sales_settings_simple_v1';
+    // Embedded 67 Students extracted directly from PDF
+    const ORIGINAL_STUDENTS = [
+  {
+    "id": "sv_1_DPM259999",
+    "stt": 1,
+    "studentCode": "DPM259999",
+    "fullName": "Ngô Lê Thiên Lộc",
+    "classCode": "DH26PM",
+    "phone": "...",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_2_IFT626005",
+    "stt": 2,
+    "studentCode": "IFT626005",
+    "fullName": "Lâm Quốc Anh",
+    "classCode": "DH27TH2",
+    "phone": "0364479394",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_3_IFT626011",
+    "stt": 3,
+    "studentCode": "IFT626011",
+    "fullName": "Huỳnh Đức Anh",
+    "classCode": "DH27TH2",
+    "phone": "0392777460",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_4_IFT626014",
+    "stt": 4,
+    "studentCode": "IFT626014",
+    "fullName": "Phạm Quốc Bảo",
+    "classCode": "DH27TH2",
+    "phone": "0384005585",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_5_IFT626017",
+    "stt": 5,
+    "studentCode": "IFT626017",
+    "fullName": "Lưu Quốc Bửu",
+    "classCode": "DH27TH2",
+    "phone": "0888092128",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_6_IFT626021",
+    "stt": 6,
+    "studentCode": "IFT626021",
+    "fullName": "Nguyễn Trần Trung Chiến",
+    "classCode": "DH27TH2",
+    "phone": "0906266884",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_7_IFT626029",
+    "stt": 7,
+    "studentCode": "IFT626029",
+    "fullName": "Lý Thành Đạt",
+    "classCode": "DH27TH2",
+    "phone": "0867747617",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_8_IFT626033",
+    "stt": 8,
+    "studentCode": "IFT626033",
+    "fullName": "Bùi Thanh Đạt",
+    "classCode": "DH27TH2",
+    "phone": "0766986205",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_9_IFT626035",
+    "stt": 9,
+    "studentCode": "IFT626035",
+    "fullName": "Nguyễn Rạng Đông",
+    "classCode": "DH27TH2",
+    "phone": "0333052692",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_10_IFT626036",
+    "stt": 10,
+    "studentCode": "IFT626036",
+    "fullName": "Lê Hữu Đức",
+    "classCode": "DH27TH2",
+    "phone": "0358996452",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_11_IFT626042",
+    "stt": 11,
+    "studentCode": "IFT626042",
+    "fullName": "Nguyễn Tấn Dương",
+    "classCode": "DH27TH2",
+    "phone": "0837280272",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_12_IFT626046",
+    "stt": 12,
+    "studentCode": "IFT626046",
+    "fullName": "Tạ Đại Phú Gia",
+    "classCode": "DH27TH2",
+    "phone": "0888690971",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_13_IFT626048",
+    "stt": 13,
+    "studentCode": "IFT626048",
+    "fullName": "Nguyễn Thành Hải",
+    "classCode": "DH27TH2",
+    "phone": "0342709355",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_14_IFT626054",
+    "stt": 14,
+    "studentCode": "IFT626054",
+    "fullName": "Cao Chí Hiển",
+    "classCode": "DH27TH2",
+    "phone": "0964988861",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_15_IFT626055",
+    "stt": 15,
+    "studentCode": "IFT626055",
+    "fullName": "Trần Thanh Hiếu",
+    "classCode": "DH27TH2",
+    "phone": "0346943324",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_16_IFT626056",
+    "stt": 16,
+    "studentCode": "IFT626056",
+    "fullName": "Dương Trung Hiếu",
+    "classCode": "DH27TH2",
+    "phone": "0796957708",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_17_IFT626057",
+    "stt": 17,
+    "studentCode": "IFT626057",
+    "fullName": "Lê Huỳnh Minh Hiếu",
+    "classCode": "DH27TH2",
+    "phone": "0971977229",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_18_IFT626058",
+    "stt": 18,
+    "studentCode": "IFT626058",
+    "fullName": "Ngô Trung Hiếu",
+    "classCode": "DH27TH2",
+    "phone": "0975262332",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_19_IFT626059",
+    "stt": 19,
+    "studentCode": "IFT626059",
+    "fullName": "Trần Long Hồ",
+    "classCode": "DH27TH2",
+    "phone": "0392678311",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_20_IFT626062",
+    "stt": 20,
+    "studentCode": "IFT626062",
+    "fullName": "Trần Viết Thanh Hoàng",
+    "classCode": "DH27TH2",
+    "phone": "0787882106",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_21_IFT626063",
+    "stt": 21,
+    "studentCode": "IFT626063",
+    "fullName": "Nguyễn Thị Kim Hồng",
+    "classCode": "DH27TH2",
+    "phone": "0984261366",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_22_IFT626065",
+    "stt": 22,
+    "studentCode": "IFT626065",
+    "fullName": "Nguyễn Hưng",
+    "classCode": "DH27TH2",
+    "phone": "0931504804",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_23_IFT626073",
+    "stt": 23,
+    "studentCode": "IFT626073",
+    "fullName": "Lê Duy Khải",
+    "classCode": "DH27TH2",
+    "phone": "0358546872",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_24_IFT626077",
+    "stt": 24,
+    "studentCode": "IFT626077",
+    "fullName": "Phan Hồng Minh Khoa",
+    "classCode": "DH27TH2",
+    "phone": "0372062589",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_25_IFT626079",
+    "stt": 25,
+    "studentCode": "IFT626079",
+    "fullName": "Nguyễn Hoàng Anh Khoa",
+    "classCode": "DH27TH2",
+    "phone": "0877941530",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_26_IFT626084",
+    "stt": 26,
+    "studentCode": "IFT626084",
+    "fullName": "Dương Đăng Khôi",
+    "classCode": "DH27TH2",
+    "phone": "0334223929",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_27_IFT626089",
+    "stt": 27,
+    "studentCode": "IFT626089",
+    "fullName": "Huỳnh Gia Lạc",
+    "classCode": "DH27TH2",
+    "phone": "0946970980",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_28_IFT626095",
+    "stt": 28,
+    "studentCode": "IFT626095",
+    "fullName": "Trần Nguyên Lê",
+    "classCode": "DH27TH2",
+    "phone": "0982473008",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_29_IFT626097",
+    "stt": 29,
+    "studentCode": "IFT626097",
+    "fullName": "Viễn Ái Lộc",
+    "classCode": "DH27TH2",
+    "phone": "0796872462",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_30_IFT626103",
+    "stt": 30,
+    "studentCode": "IFT626103",
+    "fullName": "Nguyễn Phạm Diễm My",
+    "classCode": "DH27TH2",
+    "phone": "0932915492",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_31_IFT626105",
+    "stt": 31,
+    "studentCode": "IFT626105",
+    "fullName": "Chau Nếth",
+    "classCode": "DH27TH2",
+    "phone": "0397799154",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_32_IFT626106",
+    "stt": 32,
+    "studentCode": "IFT626106",
+    "fullName": "Lê Trọng Nghĩa",
+    "classCode": "DH27TH2",
+    "phone": "0393034609",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_33_IFT626108",
+    "stt": 33,
+    "studentCode": "IFT626108",
+    "fullName": "Lê Trọng Nghĩa",
+    "classCode": "DH27TH2",
+    "phone": "0923582203",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_34_IFT626116",
+    "stt": 34,
+    "studentCode": "IFT626116",
+    "fullName": "Nguyễn Thanh Nhã",
+    "classCode": "DH27TH2",
+    "phone": "0343384641",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_35_IFT626132",
+    "stt": 35,
+    "studentCode": "IFT626132",
+    "fullName": "Võ Hoàng Anh Pha",
+    "classCode": "DH27TH2",
+    "phone": "0932957898",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_36_IFT626135",
+    "stt": 36,
+    "studentCode": "IFT626135",
+    "fullName": "Nguyễn Trương Hoàng Phi",
+    "classCode": "DH27TH2",
+    "phone": "0916923533",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_37_IFT626136",
+    "stt": 37,
+    "studentCode": "IFT626136",
+    "fullName": "Nguyễn Hoàn Phú",
+    "classCode": "DH27TH2",
+    "phone": "0589474824",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_38_IFT626137",
+    "stt": 38,
+    "studentCode": "IFT626137",
+    "fullName": "Trần Trọng Phúc",
+    "classCode": "DH27TH2",
+    "phone": "0384326908",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_39_IFT626140",
+    "stt": 39,
+    "studentCode": "IFT626140",
+    "fullName": "Lê Hoàng Phúc",
+    "classCode": "DH27TH2",
+    "phone": "0378024942",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_40_IFT626143",
+    "stt": 40,
+    "studentCode": "IFT626143",
+    "fullName": "Nguyễn Phú Quí",
+    "classCode": "DH27TH2",
+    "phone": "0382138824",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_41_IFT626147",
+    "stt": 41,
+    "studentCode": "IFT626147",
+    "fullName": "Trịnh Trí Tài",
+    "classCode": "DH27TH2",
+    "phone": "0332710720",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_42_IFT626149",
+    "stt": 42,
+    "studentCode": "IFT626149",
+    "fullName": "Đỗ Ngọc Tải",
+    "classCode": "DH27TH2",
+    "phone": "0373992512",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_43_IFT626152",
+    "stt": 43,
+    "studentCode": "IFT626152",
+    "fullName": "Mai Duy Tâm",
+    "classCode": "DH27TH2",
+    "phone": "0799725106",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_44_IFT626157",
+    "stt": 44,
+    "studentCode": "IFT626157",
+    "fullName": "Phạm Hồng Thái",
+    "classCode": "DH27TH2",
+    "phone": "0388603411",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_45_IFT626158",
+    "stt": 45,
+    "studentCode": "IFT626158",
+    "fullName": "Phạm Nguyễn Quốc Thắng",
+    "classCode": "DH27TH2",
+    "phone": "0357733705",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_46_IFT626162",
+    "stt": 46,
+    "studentCode": "IFT626162",
+    "fullName": "Nguyễn Hoàng Thành",
+    "classCode": "DH27TH2",
+    "phone": "0388519492",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_47_IFT626165",
+    "stt": 47,
+    "studentCode": "IFT626165",
+    "fullName": "Nguyễn Minh Thảo",
+    "classCode": "DH27TH2",
+    "phone": "0393332370",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_48_IFT626167",
+    "stt": 48,
+    "studentCode": "IFT626167",
+    "fullName": "Nguyễn Phước Thế",
+    "classCode": "DH27TH2",
+    "phone": "0792181145",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_49_IFT626180",
+    "stt": 49,
+    "studentCode": "IFT626180",
+    "fullName": "Lê Đỗ Quốc Thuận",
+    "classCode": "DH27TH2",
+    "phone": "0333171740",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_50_IFT626187",
+    "stt": 50,
+    "studentCode": "IFT626187",
+    "fullName": "Nguyễn Trọng Tính",
+    "classCode": "DH27TH2",
+    "phone": "0345546752",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_51_IFT626194",
+    "stt": 51,
+    "studentCode": "IFT626194",
+    "fullName": "Nguyễn Hữu Trí",
+    "classCode": "DH27TH2",
+    "phone": "0917841049",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_52_IFT626195",
+    "stt": 52,
+    "studentCode": "IFT626195",
+    "fullName": "Nguyễn Hữu Đức Trí",
+    "classCode": "DH27TH2",
+    "phone": "0793310512",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_53_IFT626196",
+    "stt": 53,
+    "studentCode": "IFT626196",
+    "fullName": "Huỳnh Minh Triết",
+    "classCode": "DH27TH2",
+    "phone": "0375500650",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_54_IFT626197",
+    "stt": 54,
+    "studentCode": "IFT626197",
+    "fullName": "Trần Minh Triết",
+    "classCode": "DH27TH2",
+    "phone": "0348275997",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_55_IFT626199",
+    "stt": 55,
+    "studentCode": "IFT626199",
+    "fullName": "Lê Hoàng Trọng",
+    "classCode": "DH27TH2",
+    "phone": "0384001391",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_56_IFT626202",
+    "stt": 56,
+    "studentCode": "IFT626202",
+    "fullName": "Nguyễn Thanh Trúc",
+    "classCode": "DH27TH2",
+    "phone": "0362055891",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_57_IFT626205",
+    "stt": 57,
+    "studentCode": "IFT626205",
+    "fullName": "Võ Lê Thiên Trường",
+    "classCode": "DH27TH2",
+    "phone": "0357871208",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_58_IFT626208",
+    "stt": 58,
+    "studentCode": "IFT626208",
+    "fullName": "Trương Thanh Tú",
+    "classCode": "DH27TH2",
+    "phone": "0369194054",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_59_IFT626209",
+    "stt": 59,
+    "studentCode": "IFT626209",
+    "fullName": "Nguyễn Dương Tuấn",
+    "classCode": "DH27TH2",
+    "phone": "0373864035",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_60_IFT626211",
+    "stt": 60,
+    "studentCode": "IFT626211",
+    "fullName": "Trương Nguyễn Khải Tường",
+    "classCode": "DH27TH2",
+    "phone": "0916151936",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_61_IFT626215",
+    "stt": 61,
+    "studentCode": "IFT626215",
+    "fullName": "Nguyễn Thị Thanh Tuyền",
+    "classCode": "DH27TH2",
+    "phone": "0347324929",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_62_IFT626217",
+    "stt": 62,
+    "studentCode": "IFT626217",
+    "fullName": "Ngụy Ngữ Uyên",
+    "classCode": "DH27TH2",
+    "phone": "0707232154",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_63_IFT626218",
+    "stt": 63,
+    "studentCode": "IFT626218",
+    "fullName": "Nguyễn Kiều Vi",
+    "classCode": "DH27TH2",
+    "phone": "0397066404",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_64_IFT626219",
+    "stt": 64,
+    "studentCode": "IFT626219",
+    "fullName": "Nguyễn Thị Thúy Vi",
+    "classCode": "DH27TH2",
+    "phone": "0352113564",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_65_IFT626223",
+    "stt": 65,
+    "studentCode": "IFT626223",
+    "fullName": "Phan Trúc Việt",
+    "classCode": "DH27TH2",
+    "phone": "0968706274",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_66_IFT626225",
+    "stt": 66,
+    "studentCode": "IFT626225",
+    "fullName": "Nguyễn Phan Nguyên Vũ",
+    "classCode": "DH27TH2",
+    "phone": "0866740132",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  },
+  {
+    "id": "sv_67_IFT626230",
+    "stt": 67,
+    "studentCode": "IFT626230",
+    "fullName": "Cao Thị Bích Xuân",
+    "classCode": "DH27TH2",
+    "phone": "0918920298",
+    "paymentMethod": null,
+    "isTicked": false,
+    "paymentTime": null
+  }
+];
+
+    const STORAGE_KEY = 'book_sales_data_67_v1';
+    const SETTINGS_KEY = 'book_sales_settings_67_v1';
 
     let students = [];
     let settings = {
@@ -261,10 +965,19 @@
       try {
         const savedStudents = localStorage.getItem(STORAGE_KEY);
         const savedSettings = localStorage.getItem(SETTINGS_KEY);
-        if (savedStudents) students = JSON.parse(savedStudents);
-        if (savedSettings) settings = JSON.parse(savedSettings);
+        if (savedStudents) {
+          students = JSON.parse(savedStudents);
+        } else {
+          // Default to the 67 extracted students
+          students = JSON.parse(JSON.stringify(ORIGINAL_STUDENTS));
+          saveToStorage();
+        }
+        if (savedSettings) {
+          settings = JSON.parse(savedSettings);
+        }
       } catch (err) {
         console.error('Lỗi đọc localStorage:', err);
+        students = JSON.parse(JSON.stringify(ORIGINAL_STUDENTS));
       }
     }
 
@@ -351,18 +1064,7 @@
 
     function renderList() {
       const container = document.getElementById('student-list');
-      const emptyState = document.getElementById('empty-state');
       const notFoundState = document.getElementById('not-found-state');
-
-      if (!students || students.length === 0) {
-        container.innerHTML = '';
-        emptyState.classList.remove('hidden');
-        notFoundState.classList.add('hidden');
-        updateStats();
-        return;
-      }
-
-      emptyState.classList.add('hidden');
 
       const filtered = students.filter(student => {
         if (currentFilter === 'unpaid' && student.paymentMethod) return false;
@@ -396,7 +1098,6 @@
         const isPaid = isPaidCash || isPaidTransfer;
         const isTicked = student.isTicked || isPaid;
 
-        // Card background styling
         let cardBg = 'bg-white border-slate-200';
         if (isPaidCash) cardBg = 'bg-slate-50 border-slate-400';
         else if (isPaidTransfer) cardBg = 'bg-slate-50 border-slate-400';
@@ -525,13 +1226,36 @@
       updateStats();
     }
 
-    // Modal Import
+    // Modal Settings
     function openImportModal() {
       document.getElementById('import-modal').classList.remove('hidden');
     }
 
     function closeImportModal() {
       document.getElementById('import-modal').classList.add('hidden');
+    }
+
+    function resetToOriginalPDF() {
+      if (confirm('Bạn có muốn nạp lại danh sách 67 sinh viên gốc từ file PDF không? (Dữ liệu tick trước đó sẽ được làm mới)')) {
+        students = JSON.parse(JSON.stringify(ORIGINAL_STUDENTS));
+        saveToStorage();
+        renderApp();
+        closeImportModal();
+        alert('Đã nạp thành công 67 sinh viên!');
+      }
+    }
+
+    function clearAllPaymentMarks() {
+      if (confirm('Bạn có chắc muốn xóa toàn bộ đánh dấu tick và tiền đã thu không?')) {
+        students.forEach(s => {
+          s.paymentMethod = null;
+          s.isTicked = false;
+          s.paymentTime = null;
+        });
+        saveToStorage();
+        renderApp();
+        closeImportModal();
+      }
     }
 
     // Excel Export
@@ -601,136 +1325,6 @@
       XLSX.writeFile(workbook, filename);
     }
 
-    // PDF Parser
-    async function handlePDFUpload(input) {
-      const file = input.files[0];
-      if (!file) return;
-
-      const loadingEl = document.getElementById('pdf-loading');
-      if (loadingEl) loadingEl.classList.remove('hidden');
-
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        
-        let fullLines = [];
-
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          const page = await pdf.getPage(pageNum);
-          const textContent = await page.getTextContent();
-          
-          const lineMap = new Map();
-          textContent.items.forEach(item => {
-            const y = Math.round(item.transform[5]);
-            if (!lineMap.has(y)) lineMap.set(y, []);
-            lineMap.get(y).push({ x: item.transform[4], text: item.str });
-          });
-
-          const sortedYs = Array.from(lineMap.keys()).sort((a, b) => b - a);
-          sortedYs.forEach(y => {
-            const items = lineMap.get(y).sort((a, b) => a.x - b.x);
-            const lineText = items.map(i => i.text.trim()).filter(Boolean).join('   ');
-            if (lineText.trim()) fullLines.push(lineText);
-          });
-        }
-
-        parseExtractedLines(fullLines);
-        closeImportModal();
-        alert(`Đã trích xuất thành công ${students.length} sinh viên từ file PDF!`);
-      } catch (err) {
-        console.error('PDF error:', err);
-        alert('Không thể đọc file PDF tự động. Bạn có thể copy paste vào ô bên dưới.');
-      } finally {
-        if (loadingEl) loadingEl.classList.add('hidden');
-        input.value = '';
-      }
-    }
-
-    function parseExtractedLines(lines) {
-      const parsed = [];
-      let autoSTT = 1;
-
-      lines.forEach(line => {
-        const clean = line.trim();
-        if (!clean) return;
-
-        const lower = clean.toLowerCase();
-        if (lower.includes('họ và tên') || lower.includes('mã sinh viên') || lower.includes('danh sách') || lower.includes('trang') || lower.includes('stt') || lower.includes('chữ ký')) {
-          return;
-        }
-
-        const tokens = clean.split(/\s{2,}|\t/).map(t => t.trim()).filter(Boolean);
-
-        if (tokens.length >= 3) {
-          let stt = autoSTT;
-          let code = '';
-          let name = '';
-          let classCode = '';
-
-          if (/^\d+$/.test(tokens[0]) && tokens.length >= 4) {
-            stt = parseInt(tokens[0], 10);
-            code = tokens[1];
-            if (tokens.length >= 5) {
-              name = tokens.slice(2, tokens.length - 1).join(' ');
-              classCode = tokens[tokens.length - 1];
-            } else {
-              name = tokens[2];
-              classCode = tokens[3];
-            }
-          } else {
-            code = tokens[0];
-            name = tokens[1];
-            classCode = tokens[2] || '';
-          }
-
-          parsed.push({
-            id: 'sv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-            stt: stt,
-            studentCode: code,
-            fullName: name,
-            classCode: classCode,
-            paymentMethod: null,
-            isTicked: false,
-            paymentTime: null
-          });
-          autoSTT++;
-        } else {
-          // Space fallback
-          const match = clean.match(/^(\d+)?\s*([0-9A-Za-z]{6,15})\s+(.+?)\s+([0-9A-Za-z_-]{4,20})$/);
-          if (match) {
-            parsed.push({
-              id: 'sv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-              stt: match[1] ? parseInt(match[1], 10) : autoSTT++,
-              studentCode: match[2],
-              fullName: match[3],
-              classCode: match[4],
-              paymentMethod: null,
-              isTicked: false,
-              paymentTime: null
-            });
-          }
-        }
-      });
-
-      if (parsed.length > 0) {
-        students = parsed;
-        saveToStorage();
-        renderApp();
-      }
-    }
-
-    function importPastedText() {
-      const text = document.getElementById('paste-textarea').value;
-      if (!text.trim()) {
-        alert('Vui lòng dán văn bản trước!');
-        return;
-      }
-      parseExtractedLines(text.split('\n'));
-      document.getElementById('paste-textarea').value = '';
-      closeImportModal();
-      alert(`Đã nạp ${students.length} sinh viên!`);
-    }
-
     function backupJSON() {
       const data = { students, settings, backupTime: new Date().toISOString() };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -761,15 +1355,6 @@
         }
       };
       reader.readAsText(file);
-    }
-
-    function confirmResetAll() {
-      if (confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu để làm mới không?')) {
-        students = [];
-        saveToStorage();
-        renderApp();
-        closeImportModal();
-      }
     }
   </script>
 </body>
