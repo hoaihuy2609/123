@@ -131,13 +131,14 @@
       
       <div class="relative mb-3">
         <input 
-          type="number" 
+          type="text" 
+          inputmode="numeric"
           id="price-input" 
-          step="1000" 
-          placeholder="Ví dụ: 50000" 
-          class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-800"
+          oninput="formatPriceInput(this)"
+          placeholder="Ví dụ: 150.000" 
+          class="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-800"
         />
-        <span class="absolute right-2.5 top-2 text-[11px] text-slate-400 font-semibold">VNĐ</span>
+        <span class="absolute right-2.5 top-2.5 text-[11px] text-slate-400 font-semibold">VNĐ</span>
       </div>
 
       <div class="flex items-center gap-2">
@@ -982,9 +983,16 @@
       }
     }
 
+    function formatNumberWithDots(val) {
+      if (!val && val !== 0) return '';
+      const numStr = String(val).replace(/\D/g, '');
+      if (!numStr) return '';
+      return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+
     function formatCurrency(amount) {
       if (!amount || isNaN(amount)) return '0đ';
-      return new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
+      return formatNumberWithDots(amount) + 'đ';
     }
 
     function getNowFormatted() {
@@ -1193,10 +1201,24 @@
     }
 
     // Modal Price
+    function formatPriceInput(input) {
+      const raw = input.value.replace(/\D/g, '');
+      if (!raw) {
+        input.value = '';
+        return;
+      }
+      input.value = formatNumberWithDots(raw);
+    }
+
     function openPriceModal() {
-      document.getElementById('price-input').value = settings.pricePerBook || '';
+      const price = settings.pricePerBook;
+      document.getElementById('price-input').value = price ? formatNumberWithDots(price) : '';
       document.getElementById('price-modal').classList.remove('hidden');
-      document.getElementById('price-input').focus();
+      setTimeout(() => {
+        const inp = document.getElementById('price-input');
+        inp.focus();
+        inp.select();
+      }, 50);
     }
 
     function closePriceModal() {
@@ -1205,7 +1227,8 @@
 
     function savePriceSetting() {
       const input = document.getElementById('price-input').value;
-      const val = parseInt(input, 10);
+      const cleanNum = input.replace(/\D/g, '');
+      const val = parseInt(cleanNum, 10);
       settings.pricePerBook = isNaN(val) ? 0 : val;
       saveToStorage();
       closePriceModal();
