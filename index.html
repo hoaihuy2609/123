@@ -1278,13 +1278,13 @@
 
       const dataRows = students.map((s, idx) => {
         let hinhThuc = 'Chưa thu';
-        let soTien = 0;
+        let soTienStr = '0';
         if (s.paymentMethod === 'cash') {
           hinhThuc = 'Tiền mặt';
-          soTien = price;
+          soTienStr = formatNumberWithDots(price);
         } else if (s.paymentMethod === 'transfer') {
           hinhThuc = 'Chuyển khoản';
-          soTien = price;
+          soTienStr = formatNumberWithDots(price);
         }
 
         return {
@@ -1294,13 +1294,14 @@
           'Mã Lớp': s.classCode || '',
           'Trạng Thái Tick': (s.isTicked || s.paymentMethod) ? 'Đã nhận' : 'Chưa',
           'Hình Thức Thanh Toán': hinhThuc,
-          'Số Tiền (VNĐ)': soTien,
+          'Số Tiền (VNĐ)': soTienStr,
           'Thời Gian Ghi Nhận': s.paymentTime || ''
         };
       });
 
       const cashCount = students.filter(s => s.paymentMethod === 'cash').length;
       const transferCount = students.filter(s => s.paymentMethod === 'transfer').length;
+      const totalCollected = (cashCount + transferCount) * price;
 
       dataRows.push({});
       dataRows.push({
@@ -1309,8 +1310,8 @@
         'Họ và Tên': `Tổng: ${students.length} sinh viên`,
         'Mã Lớp': '',
         'Trạng Thái Tick': `Tiền mặt: ${cashCount} | CK: ${transferCount}`,
-        'Hình Thức Thanh Toán': `Tổng tiền: ${(cashCount + transferCount) * price} VNĐ`,
-        'Số Tiền (VNĐ)': (cashCount + transferCount) * price,
+        'Hình Thức Thanh Toán': `Tổng đã thu: ${formatNumberWithDots(totalCollected)} VNĐ`,
+        'Số Tiền (VNĐ)': formatNumberWithDots(totalCollected),
         'Thời Gian Ghi Nhận': `Xuất lúc: ${getNowFormatted()}`
       });
 
