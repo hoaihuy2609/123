@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Bán Sách - Điểm Danh & Thu Tiền</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS (xlsx) CDN for Excel Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- PDF.js CDN for reading PDF in browser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #ffffff;
+      color: #0f172a;
+    }
+    .sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background-color: #ffffff;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      display: none;
+    }
+    .touch-btn {
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-white text-slate-900 antialiased">
+
+  <!-- ================= TOP STICKY BAR ================= -->
+  <header class="sticky-header border-b border-slate-200 shadow-xs">
+    <div class="max-w-xl mx-auto px-3 pt-2.5 pb-2">
+      
+      <!-- Top Title & Quick Actions -->
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <div class="flex items-center gap-1.5">
+          <span class="text-base font-bold tracking-tight text-slate-900">📖 Bán Sách</span>
+          <span id="save-tag" class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-200">
+            ✓ Đã lưu máy
+          </span>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <!-- Price per book button -->
+          <button onclick="openPriceModal()" class="touch-btn px-2 py-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1">
+            <span>🏷️</span> <span id="price-display">0đ</span>
+          </button>
+
+          <!-- Export Excel button -->
+          <button onclick="exportToExcel()" class="touch-btn px-2.5 py-1 rounded-md bg-slate-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-1 shadow-xs active:scale-95 transition-transform">
+            <span>📥 Xuất Excel</span>
+          </button>
+
+          <!-- Settings / Import button -->
+          <button onclick="openImportModal()" class="touch-btn p-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs" title="Cài đặt / Tải PDF">
+            ⚙️
+          </button>
+        </div>
+      </div>
+
+      <!-- 3 STATS CARDS: Tiền mặt | Chuyển khoản | Tổng tiền đã thu -->
+      <div class="grid grid-cols-3 gap-1.5 mb-2">
+        <!-- Tiền mặt -->
+        <div class="bg-white p-2 rounded-lg border border-slate-200 text-center">
+          <div class="text-[10px] font-medium text-slate-500">💵 Tiền mặt (<span id="count-cash">0</span>)</div>
+          <div class="text-xs sm:text-sm font-bold text-slate-900 mt-0.5 truncate" id="stat-cash">0đ</div>
+        </div>
+
+        <!-- Chuyển khoản -->
+        <div class="bg-white p-2 rounded-lg border border-slate-200 text-center">
+          <div class="text-[10px] font-medium text-slate-500">💳 CK (<span id="count-transfer">0</span>)</div>
+          <div class="text-xs sm:text-sm font-bold text-slate-900 mt-0.5 truncate" id="stat-transfer">0đ</div>
+        </div>
+
+        <!-- Tổng đã thu -->
+        <div class="bg-slate-50 p-2 rounded-lg border border-slate-300 text-center">
+          <div class="text-[10px] font-semibold text-slate-700">💰 Tổng đã thu</div>
+          <div class="text-xs sm:text-sm font-extrabold text-emerald-600 mt-0.5 truncate" id="stat-total">0đ</div>
+        </div>
+      </div>
+
+      <!-- Search Input -->
+      <div class="relative flex items-center mb-1.5">
+        <span class="absolute left-2.5 text-slate-400 text-xs">🔍</span>
+        <input 
+          type="text" 
+          id="search-input" 
+          placeholder="Tìm theo tên, MSSV, mã lớp..." 
+          oninput="handleSearch(this.value)"
+          class="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:outline-none focus:border-slate-800 focus:ring-0 placeholder:text-slate-400"
+        />
+        <button 
+          id="clear-search-btn" 
+          onclick="clearSearch()" 
+          class="hidden absolute right-2 text-slate-400 hover:text-slate-600 p-0.5 text-xs font-bold"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- Filter Tabs -->
+      <div class="flex items-center gap-1 overflow-x-auto custom-scroll text-[11px]">
+        <button onclick="setFilter('all')" id="filter-all" class="filter-btn px-2.5 py-0.5 rounded-full font-semibold transition-all bg-slate-900 text-white shrink-0">
+          Tất cả (<span id="count-all">0</span>)
+        </button>
+        <button onclick="setFilter('unpaid')" id="filter-unpaid" class="filter-btn px-2.5 py-0.5 rounded-full font-medium transition-all bg-white border border-slate-200 text-slate-600 shrink-0">
+          Chưa thu (<span id="count-unpaid">0</span>)
+        </button>
+        <button onclick="setFilter('cash')" id="filter-cash" class="filter-btn px-2.5 py-0.5 rounded-full font-medium transition-all bg-white border border-slate-200 text-slate-600 shrink-0">
+          Tiền mặt
+        </button>
+        <button onclick="setFilter('transfer')" id="filter-transfer" class="filter-btn px-2.5 py-0.5 rounded-full font-medium transition-all bg-white border border-slate-200 text-slate-600 shrink-0">
+          Chuyển khoản
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ================= MAIN STUDENT LIST ================= -->
+  <main class="flex-1 max-w-xl w-full mx-auto px-3 py-2">
+    <!-- List -->
+    <div id="student-list" class="space-y-1.5 pb-20">
+      <!-- Items generated here -->
+    </div>
+
+    <!-- Empty State (No file imported yet) -->
+    <div id="empty-state" class="text-center py-10 px-4 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 my-2">
+      <div class="text-3xl mb-1.5">📄</div>
+      <p class="text-slate-800 font-bold text-xs">Chưa có danh sách sinh viên</p>
+      <p class="text-slate-500 text-[11px] mt-0.5 mb-3">Tải file PDF của bạn lên để tự động nhận diện STT, MSSV, Họ và Tên, Lớp.</p>
+      
+      <label class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-xs cursor-pointer active:scale-95 transition-transform">
+        <span>📂 Chọn file PDF</span>
+        <input type="file" accept=".pdf" onchange="handlePDFUpload(this)" class="hidden" />
+      </label>
+    </div>
+
+    <!-- Search Not Found State -->
+    <div id="not-found-state" class="hidden text-center py-8 text-slate-400 text-xs">
+      Không tìm thấy sinh viên phù hợp.
+    </div>
+  </main>
+
+  <!-- ================= MODAL: CÀI ĐẶT GIÁ TIỀN ================= -->
+  <div id="price-modal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-xs rounded-xl p-4 shadow-lg border border-slate-200">
+      <h3 class="text-xs font-bold text-slate-900 mb-1">🏷️ Cài đặt giá tiền mỗi cuốn</h3>
+      <p class="text-[11px] text-slate-500 mb-3">Nhập giá 1 cuốn để tự động tính tổng tiền:</p>
+      
+      <div class="relative mb-3">
+        <input 
+          type="number" 
+          id="price-input" 
+          step="1000" 
+          placeholder="Ví dụ: 50000" 
+          class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-800"
+        />
+        <span class="absolute right-2.5 top-2 text-[11px] text-slate-400 font-semibold">VNĐ</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="closePriceModal()" class="flex-1 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium">
+          Hủy
+        </button>
+        <button onclick="savePriceSetting()" class="flex-1 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold">
+          Lưu lại
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: CÀI ĐẶT / NHẬP DỮ LIỆU ================= -->
+  <div id="import-modal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-sm rounded-xl p-4 shadow-lg border border-slate-200 max-h-[85vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-1.5">
+        <h3 class="text-xs font-bold text-slate-900">⚙️ Quản Lý Dữ Liệu</h3>
+        <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-700 text-sm font-bold p-1">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <!-- 1. PDF Upload -->
+        <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+          <label class="block text-xs font-bold text-slate-800 mb-1">📄 1. Tải file PDF mới</label>
+          <p class="text-[11px] text-slate-500 mb-2">Tự động lấy: STT, Mã SV, Họ & Tên (gom lại), Mã Lớp.</p>
+          <input 
+            type="file" 
+            accept=".pdf" 
+            onchange="handlePDFUpload(this)"
+            class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[11px] file:font-semibold file:bg-slate-900 file:text-white cursor-pointer"
+          />
+          <div id="pdf-loading" class="hidden text-[11px] text-blue-600 font-semibold mt-1.5">
+            ⏳ Đang đọc và trích xuất dữ liệu từ PDF...
+          </div>
+        </div>
+
+        <!-- 2. Copy/Paste Text -->
+        <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+          <label class="block text-xs font-bold text-slate-800 mb-1">📋 2. Hoặc Dán văn bản</label>
+          <textarea 
+            id="paste-textarea" 
+            rows="3" 
+            placeholder="STT   MSSV   Họ và Tên   Mã Lớp"
+            class="w-full p-2 border border-slate-200 rounded text-xs font-mono focus:outline-none focus:border-slate-800 bg-white"
+          ></textarea>
+          <button onclick="importPastedText()" class="mt-1.5 w-full py-1 bg-slate-800 text-white rounded text-xs font-medium">
+            Nạp danh sách
+          </button>
+        </div>
+
+        <!-- 3. Backup / Clear -->
+        <div class="pt-2 border-t border-slate-100 flex flex-col gap-1.5">
+          <div class="flex items-center gap-1.5">
+            <button onclick="backupJSON()" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium">
+              💾 Sao lưu (JSON)
+            </button>
+            <label class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium text-center cursor-pointer">
+              📥 Khôi phục
+              <input type="file" accept=".json" onchange="restoreJSON(this)" class="hidden" />
+            </label>
+          </div>
+          <button onclick="confirmResetAll()" class="w-full py-1 text-red-600 hover:bg-red-50 rounded text-xs font-medium border border-red-200">
+            🗑️ Xóa toàn bộ dữ liệu hiện tại
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= JAVASCRIPT ================= -->
+  <script>
+    const STORAGE_KEY = 'book_sales_data_simple_v1';
+    const SETTINGS_KEY = 'book_sales_settings_simple_v1';
+
+    let students = [];
+    let settings = {
+      pricePerBook: 0
+    };
+    let currentFilter = 'all';
+    let searchQuery = '';
+
+    // Init
+    window.addEventListener('DOMContentLoaded', () => {
+      loadDataFromStorage();
+      renderApp();
+    });
+
+    function loadDataFromStorage() {
+      try {
+        const savedStudents = localStorage.getItem(STORAGE_KEY);
+        const savedSettings = localStorage.getItem(SETTINGS_KEY);
+        if (savedStudents) students = JSON.parse(savedStudents);
+        if (savedSettings) settings = JSON.parse(savedSettings);
+      } catch (err) {
+        console.error('Lỗi đọc localStorage:', err);
+      }
+    }
+
+    function saveToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        
+        const tag = document.getElementById('save-tag');
+        if (tag) {
+          tag.innerText = '✓ Đã lưu';
+          tag.className = 'text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-200';
+        }
+      } catch (err) {
+        console.error('Lỗi ghi localStorage:', err);
+      }
+    }
+
+    function formatCurrency(amount) {
+      if (!amount || isNaN(amount)) return '0đ';
+      return new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
+    }
+
+    function getNowFormatted() {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}`;
+    }
+
+    function updateStats() {
+      const total = students.length;
+      const cashCount = students.filter(s => s.paymentMethod === 'cash').length;
+      const transferCount = students.filter(s => s.paymentMethod === 'transfer').length;
+      const unpaidCount = students.filter(s => !s.paymentMethod).length;
+
+      const price = settings.pricePerBook || 0;
+      const cashTotal = cashCount * price;
+      const transferTotal = transferCount * price;
+      const grandTotal = cashTotal + transferTotal;
+
+      document.getElementById('stat-cash').innerText = formatCurrency(cashTotal);
+      document.getElementById('stat-transfer').innerText = formatCurrency(transferTotal);
+      document.getElementById('stat-total').innerText = formatCurrency(grandTotal);
+
+      document.getElementById('count-cash').innerText = cashCount;
+      document.getElementById('count-transfer').innerText = transferCount;
+      document.getElementById('count-all').innerText = total;
+      document.getElementById('count-unpaid').innerText = unpaidCount;
+
+      document.getElementById('price-display').innerText = settings.pricePerBook ? formatCurrency(settings.pricePerBook) : 'Đặt giá';
+    }
+
+    function setFilter(filterType) {
+      currentFilter = filterType;
+      
+      const buttons = document.querySelectorAll('.filter-btn');
+      buttons.forEach(btn => {
+        btn.className = 'filter-btn px-2.5 py-0.5 rounded-full font-medium transition-all bg-white border border-slate-200 text-slate-600 shrink-0';
+      });
+
+      const activeBtn = document.getElementById(`filter-${filterType}`);
+      if (activeBtn) {
+        activeBtn.className = 'filter-btn px-2.5 py-0.5 rounded-full font-semibold transition-all bg-slate-900 text-white shrink-0';
+      }
+
+      renderList();
+    }
+
+    function handleSearch(val) {
+      searchQuery = val.trim().toLowerCase();
+      const clearBtn = document.getElementById('clear-search-btn');
+      if (searchQuery.length > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+      renderList();
+    }
+
+    function clearSearch() {
+      document.getElementById('search-input').value = '';
+      handleSearch('');
+    }
+
+    function renderList() {
+      const container = document.getElementById('student-list');
+      const emptyState = document.getElementById('empty-state');
+      const notFoundState = document.getElementById('not-found-state');
+
+      if (!students || students.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        notFoundState.classList.add('hidden');
+        updateStats();
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      const filtered = students.filter(student => {
+        if (currentFilter === 'unpaid' && student.paymentMethod) return false;
+        if (currentFilter === 'cash' && student.paymentMethod !== 'cash') return false;
+        if (currentFilter === 'transfer' && student.paymentMethod !== 'transfer') return false;
+
+        if (searchQuery) {
+          const matchName = (student.fullName || '').toLowerCase().includes(searchQuery);
+          const matchCode = (student.studentCode || '').toLowerCase().includes(searchQuery);
+          const matchClass = (student.classCode || '').toLowerCase().includes(searchQuery);
+          const matchSTT = String(student.stt || '').includes(searchQuery);
+          if (!matchName && !matchCode && !matchClass && !matchSTT) return false;
+        }
+
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = '';
+        notFoundState.classList.remove('hidden');
+        updateStats();
+        return;
+      }
+
+      notFoundState.classList.add('hidden');
+
+      let html = '';
+      filtered.forEach((student) => {
+        const isPaidCash = student.paymentMethod === 'cash';
+        const isPaidTransfer = student.paymentMethod === 'transfer';
+        const isPaid = isPaidCash || isPaidTransfer;
+        const isTicked = student.isTicked || isPaid;
+
+        // Card background styling
+        let cardBg = 'bg-white border-slate-200';
+        if (isPaidCash) cardBg = 'bg-slate-50 border-slate-400';
+        else if (isPaidTransfer) cardBg = 'bg-slate-50 border-slate-400';
+
+        html += `
+          <div class="p-2 rounded-lg border ${cardBg} transition-all flex flex-col gap-1.5">
+            <!-- Top line: Checkbox + Name + MSSV + Class -->
+            <div class="flex items-center justify-between gap-1.5">
+              <div class="flex items-center gap-2 flex-1 min-w-0">
+                <!-- Checkbox -->
+                <button 
+                  onclick="toggleTicked('${student.id}')"
+                  class="touch-btn w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
+                    isTicked ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-300 text-transparent'
+                  }"
+                >
+                  <svg class="w-3 h-3 fill-current" viewBox="0 0 20 20">
+                    <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                  </svg>
+                </button>
+
+                <!-- Student details -->
+                <div class="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
+                  <span class="text-[10px] font-bold text-slate-400 w-4">${student.stt || '-'}</span>
+                  <span class="text-xs font-bold text-slate-900 truncate">${escapeHtml(student.fullName || 'Không rõ tên')}</span>
+                  <span class="text-[10px] font-mono text-slate-500 bg-slate-100 px-1 rounded">${escapeHtml(student.studentCode || '')}</span>
+                  <span class="text-[10px] text-slate-500">${escapeHtml(student.classCode || '')}</span>
+                </div>
+              </div>
+
+              ${student.paymentTime ? `<span class="text-[9px] text-slate-400 font-medium shrink-0">${student.paymentTime}</span>` : ''}
+            </div>
+
+            <!-- Bottom line: 2 Quick Payment Click Buttons -->
+            <div class="grid grid-cols-2 gap-1 pl-7">
+              <!-- Tiền mặt -->
+              <button 
+                onclick="setPaymentMethod('${student.id}', 'cash')"
+                class="touch-btn py-1 px-1.5 rounded text-[11px] font-semibold transition-all flex items-center justify-center gap-1 border ${
+                  isPaidCash 
+                    ? 'bg-slate-900 text-white border-slate-900' 
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:bg-slate-100'
+                }"
+              >
+                <span>💵 Tiền mặt</span>
+                ${isPaidCash ? '<span>✓</span>' : ''}
+              </button>
+
+              <!-- Chuyển khoản -->
+              <button 
+                onclick="setPaymentMethod('${student.id}', 'transfer')"
+                class="touch-btn py-1 px-1.5 rounded text-[11px] font-semibold transition-all flex items-center justify-center gap-1 border ${
+                  isPaidTransfer 
+                    ? 'bg-slate-900 text-white border-slate-900' 
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:bg-slate-100'
+                }"
+              >
+                <span>💳 Chuyển khoản</span>
+                ${isPaidTransfer ? '<span>✓</span>' : ''}
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+      updateStats();
+    }
+
+    function toggleTicked(id) {
+      const student = students.find(s => s.id === id);
+      if (!student) return;
+      student.isTicked = !student.isTicked;
+      saveToStorage();
+      renderList();
+    }
+
+    function setPaymentMethod(id, method) {
+      const student = students.find(s => s.id === id);
+      if (!student) return;
+
+      if (student.paymentMethod === method) {
+        student.paymentMethod = null;
+        student.paymentTime = null;
+      } else {
+        student.paymentMethod = method;
+        student.isTicked = true;
+        student.paymentTime = getNowFormatted();
+      }
+
+      saveToStorage();
+      renderList();
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderApp() {
+      renderList();
+      updateStats();
+    }
+
+    // Modal Price
+    function openPriceModal() {
+      document.getElementById('price-input').value = settings.pricePerBook || '';
+      document.getElementById('price-modal').classList.remove('hidden');
+      document.getElementById('price-input').focus();
+    }
+
+    function closePriceModal() {
+      document.getElementById('price-modal').classList.add('hidden');
+    }
+
+    function savePriceSetting() {
+      const input = document.getElementById('price-input').value;
+      const val = parseInt(input, 10);
+      settings.pricePerBook = isNaN(val) ? 0 : val;
+      saveToStorage();
+      closePriceModal();
+      updateStats();
+    }
+
+    // Modal Import
+    function openImportModal() {
+      document.getElementById('import-modal').classList.remove('hidden');
+    }
+
+    function closeImportModal() {
+      document.getElementById('import-modal').classList.add('hidden');
+    }
+
+    // Excel Export
+    function exportToExcel() {
+      if (!students || students.length === 0) {
+        alert('Danh sách đang trống!');
+        return;
+      }
+
+      const price = settings.pricePerBook || 0;
+
+      const dataRows = students.map((s, idx) => {
+        let hinhThuc = 'Chưa thu';
+        let soTien = 0;
+        if (s.paymentMethod === 'cash') {
+          hinhThuc = 'Tiền mặt';
+          soTien = price;
+        } else if (s.paymentMethod === 'transfer') {
+          hinhThuc = 'Chuyển khoản';
+          soTien = price;
+        }
+
+        return {
+          'STT': s.stt || (idx + 1),
+          'Mã Sinh Viên': s.studentCode || '',
+          'Họ và Tên': s.fullName || '',
+          'Mã Lớp': s.classCode || '',
+          'Trạng Thái Tick': (s.isTicked || s.paymentMethod) ? 'Đã nhận' : 'Chưa',
+          'Hình Thức Thanh Toán': hinhThuc,
+          'Số Tiền (VNĐ)': soTien,
+          'Thời Gian Ghi Nhận': s.paymentTime || ''
+        };
+      });
+
+      const cashCount = students.filter(s => s.paymentMethod === 'cash').length;
+      const transferCount = students.filter(s => s.paymentMethod === 'transfer').length;
+
+      dataRows.push({});
+      dataRows.push({
+        'STT': 'TỔNG KẾT',
+        'Mã Sinh Viên': '',
+        'Họ và Tên': `Tổng: ${students.length} sinh viên`,
+        'Mã Lớp': '',
+        'Trạng Thái Tick': `Tiền mặt: ${cashCount} | CK: ${transferCount}`,
+        'Hình Thức Thanh Toán': `Tổng tiền: ${(cashCount + transferCount) * price} VNĐ`,
+        'Số Tiền (VNĐ)': (cashCount + transferCount) * price,
+        'Thời Gian Ghi Nhận': `Xuất lúc: ${getNowFormatted()}`
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(dataRows);
+      worksheet['!cols'] = [
+        { wch: 6 },
+        { wch: 15 },
+        { wch: 25 },
+        { wch: 14 },
+        { wch: 16 },
+        { wch: 20 },
+        { wch: 16 },
+        { wch: 20 }
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Ban_Sach');
+
+      const now = new Date();
+      const filename = `Danh_Sach_Ban_Sach_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`;
+      XLSX.writeFile(workbook, filename);
+    }
+
+    // PDF Parser
+    async function handlePDFUpload(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const loadingEl = document.getElementById('pdf-loading');
+      if (loadingEl) loadingEl.classList.remove('hidden');
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let fullLines = [];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          
+          const lineMap = new Map();
+          textContent.items.forEach(item => {
+            const y = Math.round(item.transform[5]);
+            if (!lineMap.has(y)) lineMap.set(y, []);
+            lineMap.get(y).push({ x: item.transform[4], text: item.str });
+          });
+
+          const sortedYs = Array.from(lineMap.keys()).sort((a, b) => b - a);
+          sortedYs.forEach(y => {
+            const items = lineMap.get(y).sort((a, b) => a.x - b.x);
+            const lineText = items.map(i => i.text.trim()).filter(Boolean).join('   ');
+            if (lineText.trim()) fullLines.push(lineText);
+          });
+        }
+
+        parseExtractedLines(fullLines);
+        closeImportModal();
+        alert(`Đã trích xuất thành công ${students.length} sinh viên từ file PDF!`);
+      } catch (err) {
+        console.error('PDF error:', err);
+        alert('Không thể đọc file PDF tự động. Bạn có thể copy paste vào ô bên dưới.');
+      } finally {
+        if (loadingEl) loadingEl.classList.add('hidden');
+        input.value = '';
+      }
+    }
+
+    function parseExtractedLines(lines) {
+      const parsed = [];
+      let autoSTT = 1;
+
+      lines.forEach(line => {
+        const clean = line.trim();
+        if (!clean) return;
+
+        const lower = clean.toLowerCase();
+        if (lower.includes('họ và tên') || lower.includes('mã sinh viên') || lower.includes('danh sách') || lower.includes('trang') || lower.includes('stt') || lower.includes('chữ ký')) {
+          return;
+        }
+
+        const tokens = clean.split(/\s{2,}|\t/).map(t => t.trim()).filter(Boolean);
+
+        if (tokens.length >= 3) {
+          let stt = autoSTT;
+          let code = '';
+          let name = '';
+          let classCode = '';
+
+          if (/^\d+$/.test(tokens[0]) && tokens.length >= 4) {
+            stt = parseInt(tokens[0], 10);
+            code = tokens[1];
+            if (tokens.length >= 5) {
+              name = tokens.slice(2, tokens.length - 1).join(' ');
+              classCode = tokens[tokens.length - 1];
+            } else {
+              name = tokens[2];
+              classCode = tokens[3];
+            }
+          } else {
+            code = tokens[0];
+            name = tokens[1];
+            classCode = tokens[2] || '';
+          }
+
+          parsed.push({
+            id: 'sv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            stt: stt,
+            studentCode: code,
+            fullName: name,
+            classCode: classCode,
+            paymentMethod: null,
+            isTicked: false,
+            paymentTime: null
+          });
+          autoSTT++;
+        } else {
+          // Space fallback
+          const match = clean.match(/^(\d+)?\s*([0-9A-Za-z]{6,15})\s+(.+?)\s+([0-9A-Za-z_-]{4,20})$/);
+          if (match) {
+            parsed.push({
+              id: 'sv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+              stt: match[1] ? parseInt(match[1], 10) : autoSTT++,
+              studentCode: match[2],
+              fullName: match[3],
+              classCode: match[4],
+              paymentMethod: null,
+              isTicked: false,
+              paymentTime: null
+            });
+          }
+        }
+      });
+
+      if (parsed.length > 0) {
+        students = parsed;
+        saveToStorage();
+        renderApp();
+      }
+    }
+
+    function importPastedText() {
+      const text = document.getElementById('paste-textarea').value;
+      if (!text.trim()) {
+        alert('Vui lòng dán văn bản trước!');
+        return;
+      }
+      parseExtractedLines(text.split('\n'));
+      document.getElementById('paste-textarea').value = '';
+      closeImportModal();
+      alert(`Đã nạp ${students.length} sinh viên!`);
+    }
+
+    function backupJSON() {
+      const data = { students, settings, backupTime: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Backup_Ban_Sach_${Date.now()}.json`;
+      a.click();
+    }
+
+    function restoreJSON(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (data.students && Array.isArray(data.students)) {
+            students = data.students;
+            if (data.settings) settings = data.settings;
+            saveToStorage();
+            renderApp();
+            closeImportModal();
+            alert('Khôi phục dữ liệu thành công!');
+          }
+        } catch (err) {
+          alert('Lỗi: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function confirmResetAll() {
+      if (confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu để làm mới không?')) {
+        students = [];
+        saveToStorage();
+        renderApp();
+        closeImportModal();
+      }
+    }
+  </script>
+</body>
+</html>
