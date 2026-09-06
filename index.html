@@ -38,31 +38,17 @@
   <header class="sticky-header border-b border-slate-200 shadow-xs">
     <div class="max-w-xl mx-auto px-3 pt-2.5 pb-2">
       
-      <!-- Top Title & Quick Actions -->
-      <div class="flex items-center justify-between gap-2 mb-2">
-        <div class="flex items-center gap-1.5">
-          <span class="text-base font-bold tracking-tight text-slate-900">📖 Bán Sách</span>
-          <span id="save-tag" class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-200">
-            ✓ Đã lưu máy
-          </span>
-        </div>
+      <!-- Top 2 Main Action Buttons (Enlarged) -->
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <!-- Price per book button -->
+        <button onclick="openPriceModal()" class="touch-btn py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-800 text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 shadow-2xs transition-all">
+          <span>🏷️</span> <span id="price-display">Đặt giá sách</span>
+        </button>
 
-        <div class="flex items-center gap-1.5">
-          <!-- Price per book button -->
-          <button onclick="openPriceModal()" class="touch-btn px-2 py-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1">
-            <span>🏷️</span> <span id="price-display">0đ</span>
-          </button>
-
-          <!-- Export Excel button -->
-          <button onclick="exportToExcel()" class="touch-btn px-2.5 py-1 rounded-md bg-slate-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-1 shadow-xs active:scale-95 transition-transform">
-            <span>📥 Xuất Excel</span>
-          </button>
-
-          <!-- Settings / Menu button -->
-          <button onclick="openImportModal()" class="touch-btn p-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs" title="Cài đặt / Tùy chọn">
-            ⚙️
-          </button>
-        </div>
+        <!-- Export Excel button -->
+        <button onclick="exportToExcel()" class="touch-btn py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-black active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all">
+          <span>📥 Xuất Excel</span>
+        </button>
       </div>
 
       <!-- 3 STATS CARDS: Tiền mặt | Chuyển khoản | Tổng tiền đã thu -->
