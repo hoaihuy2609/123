@@ -712,37 +712,34 @@
       const price = settings.pricePerBook || 0;
 
       const dataRows = students.map((s, idx) => {
-        let ghiNhanThanhToan = 'Chưa thanh toán';
+        let ghiNhanMuaSach = 'Chưa thanh toán';
         let cachThanhToan = '';
-        let soTienStr = '0';
+        let soTienStr = '';
 
         if (s.paymentMethod === 'cash') {
-          ghiNhanThanhToan = 'Đã thanh toán';
+          ghiNhanMuaSach = 'Đã thanh toán';
           cachThanhToan = 'Tiền mặt';
-          soTienStr = formatNumberWithDots(price);
+          soTienStr = price ? formatNumberWithDots(price) : '';
         } else if (s.paymentMethod === 'transfer') {
-          ghiNhanThanhToan = 'Đã thanh toán';
+          ghiNhanMuaSach = 'Đã thanh toán';
           cachThanhToan = 'Chuyển khoản';
-          soTienStr = formatNumberWithDots(price);
+          soTienStr = price ? formatNumberWithDots(price) : '';
         } else if (s.paymentMethod === 'unpaid_received') {
-          ghiNhanThanhToan = 'Chưa thanh toán (Đã nhận)';
-          cachThanhToan = '';
-          soTienStr = '0';
+          ghiNhanMuaSach = 'Chưa thanh toán (Đã nhận)';
         } else if (s.paymentMethod === 'other') {
-          ghiNhanThanhToan = s.otherReason || 'Khác';
-          cachThanhToan = '';
-          soTienStr = '0';
+          ghiNhanMuaSach = s.otherReason || 'Khác';
         }
 
         return {
           'STT': s.stt || (idx + 1),
-          'Mã Sinh Viên': s.studentCode || '',
+          'Mã sinh viên': s.studentCode || '',
           'Họ và Tên': s.fullName || '',
-          'Mã Lớp': s.classCode || '',
-          'Ghi nhận mua sách': ghiNhanThanhToan,
+          'Mã lớp': s.classCode || '',
+          'Ghi nhận mua sách': ghiNhanMuaSach,
           'Thanh toán': cachThanhToan,
           'Số Tiền (VNĐ)': soTienStr,
-          'Thời Gian Ghi Nhận': s.paymentTime || ''
+          'SĐT liên lạc': s.phone || '',
+          'Ghi chú': s.ghiChu || ''
         };
       });
 
@@ -756,25 +753,27 @@
       dataRows.push({});
       dataRows.push({
         'STT': 'TỔNG KẾT',
-        'Mã Sinh Viên': '',
+        'Mã sinh viên': '',
         'Họ và Tên': `Tổng: ${students.length} sinh viên`,
-        'Mã Lớp': '',
+        'Mã lớp': '',
         'Ghi nhận mua sách': `Đã thu: ${cashCount + transferCount} | Nhận chưa trả: ${unpaidRecCount} | Khác: ${otherCount}`,
         'Thanh toán': `Tiền mặt: ${cashCount} | CK: ${transferCount}`,
-        'Số Tiền (VNĐ)': formatNumberWithDots(totalMoney),
-        'Thời Gian Ghi Nhận': `Xuất lúc: ${getNowFormatted()}`
+        'Số Tiền (VNĐ)': totalMoney ? formatNumberWithDots(totalMoney) : '',
+        'SĐT liên lạc': '',
+        'Ghi chú': `Xuất lúc: ${getNowFormatted()}`
       });
 
       const worksheet = XLSX.utils.json_to_sheet(dataRows);
       worksheet['!cols'] = [
         { wch: 6 },  // STT
-        { wch: 15 }, // MSSV
-        { wch: 25 }, // Ho Ten
-        { wch: 14 }, // Lop
-        { wch: 26 }, // Ghi nhan mua sach
-        { wch: 18 }, // Thanh toan
+        { wch: 14 }, // MSSV
+        { wch: 26 }, // Ho Ten
+        { wch: 12 }, // Lop
+        { wch: 28 }, // Ghi nhan mua sach
+        { wch: 16 }, // Thanh toan
         { wch: 16 }, // So tien
-        { wch: 20 }  // Thoi gian
+        { wch: 16 }, // SDT
+        { wch: 16 }, // Ghi chu
       ];
 
       const workbook = XLSX.utils.book_new();
@@ -869,52 +868,92 @@
         if (!clean) return;
 
         const lower = clean.toLowerCase();
-        // Skip header lines or footer notes
+        // Skip header / footer lines
         if (
-          lower.includes('họ và tên') || 
-          lower.includes('mã sinh viên') || 
-          lower.includes('họ lót') || 
-          lower.includes('danh sách') || 
-          lower.includes('trang') || 
-          lower.includes('stt') || 
-          lower.includes('chữ ký') || 
-          lower.includes('sđt liên lạc') ||
-          lower.includes('ghi nhận mua sách') ||
+          lower.includes('họ và tên') ||
+          lower.includes('mã sinh viên') ||
+          lower.includes('họ lót') ||
+          lower.includes('danh sách') ||
+          lower.includes('stt') ||
+          lower.includes('chữ ký') ||
+          lower.includes('sđt') ||
+          lower.includes('ghi nhận mua') ||
+          lower.includes('thanh toán') ||
           lower.includes('phòng') ||
-          lower.includes('thứ')
+          lower.includes('chiều') ||
+          lower.includes('sáng') ||
+          lower.includes('nhóm')
         ) {
           return;
         }
 
-        // Standard student row format:
-        // STT (1-3 digits) | Student Code (5-15 chars) | Full Name | Class Code | [Optional Phone/CCCD]
-        const match = clean.match(/^(\d{1,3})\s+([A-Za-z0-9]{5,15})\s+(.+?)\s+([A-Za-z0-9_-]{4,15})($|\s+.*)/);
+        // Split by whitespace into tokens
+        const tokens = clean.split(/\s+/);
+        if (tokens.length < 4) return;
 
-        if (match) {
-          const stt = parseInt(match[1], 10);
-          const studentCode = match[2].trim();
-          const fullName = match[3].trim();
-          const classCode = match[4].trim();
+        // === Token 0: STT (1-3 digits only) ===
+        if (!/^\d{1,3}$/.test(tokens[0])) return;
+        const stt = parseInt(tokens[0], 10);
+        if (stt < 1 || stt > 500) return;
 
-          // Reject if studentCode is actually a phone number or CCCD
-          const isPhoneOrCCCD = /^0(3|5|7|8|9)\d{8}$/.test(studentCode) || /^0\d{11}$/.test(studentCode);
-          // Name must contain actual letters
-          const hasLetters = /[a-zA-Z\u00C0-\u1EF9]/.test(fullName);
+        // === Token 1: MSSV (pure ASCII alphanumeric, not a phone) ===
+        const mssv = tokens[1];
+        if (!/^[A-Za-z0-9]{5,15}$/.test(mssv)) return;
+        if (/^0[3-9]\d{8}$/.test(mssv)) return; // skip phone
+        if (/^\d{9,12}$/.test(mssv)) return;     // skip all-digit (CCCD)
+        if (seenCodes.has(mssv)) return;
 
-          if (!isPhoneOrCCCD && hasLetters && stt <= 500 && !seenCodes.has(studentCode)) {
-            seenCodes.add(studentCode);
-            parsed.push({
-              id: 'sv_' + stt + '_' + studentCode,
-              stt: stt,
-              studentCode: studentCode,
-              fullName: fullName,
-              classCode: classCode,
-              paymentMethod: null,
-              otherReason: null,
-              paymentTime: null
-            });
+        // === Find classCode: first token after MSSV that has BOTH letters AND digits ===
+        // Real class codes: DH27TH2, DH26PM (contain letters+digits)
+        // Vietnamese name parts: Trung, Thanh, An... (letters ONLY, no digit)
+        // Phone numbers: 0364479394 (digits only)
+        let classCodeIdx = -1;
+        for (let i = 2; i < tokens.length; i++) {
+          const tok = tokens[i];
+          const isAsciiAlphanumeric = /^[A-Za-z0-9]{3,15}$/.test(tok);
+          const hasLetter = /[A-Za-z]/.test(tok);
+          const hasDigit = /\d/.test(tok);
+          const isPhone = /^0[3-9]\d{8}$/.test(tok) || /^\d{9,12}$/.test(tok);
+
+          if (isAsciiAlphanumeric && hasLetter && hasDigit && !isPhone) {
+            classCodeIdx = i;
+            break;
           }
         }
+
+        if (classCodeIdx < 2) return;
+
+        // Full name = all tokens between MSSV and classCode
+        const fullName = tokens.slice(2, classCodeIdx).join(' ').trim();
+        if (!fullName) return;
+
+        const classCode = tokens[classCodeIdx];
+
+        // Extract phone and CCCD/GhiChu from remaining tokens
+        const remaining = tokens.slice(classCodeIdx + 1);
+        let phone = '';
+        let ghiChu = '';
+        remaining.forEach(tok => {
+          if (/^0[3-9]\d{8}$/.test(tok) || /^0\d{10,11}$/.test(tok)) {
+            if (!phone) phone = tok;
+          } else if (/^\d{9,12}$/.test(tok)) {
+            if (!ghiChu) ghiChu = tok;
+          }
+        });
+
+        seenCodes.add(mssv);
+        parsed.push({
+          id: 'sv_' + stt + '_' + mssv,
+          stt: stt,
+          studentCode: mssv,
+          fullName: fullName,
+          classCode: classCode,
+          phone: phone,
+          ghiChu: ghiChu,
+          paymentMethod: null,
+          otherReason: null,
+          paymentTime: null
+        });
       });
 
       if (parsed.length > 0) {
@@ -922,7 +961,7 @@
         saveToStorage();
         renderApp();
       } else {
-        alert('Không tìm thấy danh sách sinh viên hợp lệ trong file PDF!');
+        alert('Không tìm thấy danh sách sinh viên hợp lệ trong file PDF!\nVui lòng thử dán nội dung thủ công.');
       }
     }
 
