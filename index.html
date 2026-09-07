@@ -10,6 +10,8 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- PDF.js CDN for PDF reading -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   </script>
@@ -39,10 +41,79 @@
 </head>
 <body class="min-h-screen flex flex-col bg-white text-slate-900 antialiased">
 
+  <!-- ================= LOBBY SCREEN (Khi chua vao phong) ================= -->
+  <div id="lobby-screen" class="hidden fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-sm">
+      <div class="text-center mb-6">
+        <div class="text-4xl mb-2">📚</div>
+        <h1 class="text-xl font-extrabold text-slate-900">Quản Lý Bán Sách</h1>
+        <p class="text-xs text-slate-500 mt-1">Đồng bộ dữ liệu trực tiếp cho cả nhóm</p>
+      </div>
+
+      <!-- 1. Tạo phòng mới bằng cách upload file PDF -->
+      <div class="mb-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+        <div class="flex items-center gap-1.5 mb-1">
+          <span class="text-sm">📤</span>
+          <p class="text-xs font-bold text-slate-800">Tạo phòng mới</p>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-3">Tải file PDF danh sách lên, hệ thống sẽ tạo mã phòng để chia sẻ cho mọi người.</p>
+        <label class="flex items-center justify-center gap-1.5 w-full py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer active:scale-95 transition-transform">
+          <span>📄 Tải File PDF Danh Sách</span>
+          <input type="file" accept=".pdf" onchange="createRoomFromPDF(this)" class="hidden" />
+        </label>
+        <div id="lobby-loading" class="hidden text-[11px] text-blue-600 font-semibold mt-2.5 text-center">
+          ⏳ Đang đọc PDF và tạo phòng...
+        </div>
+      </div>
+
+      <!-- 2. Tham gia phòng bằng mã phòng -->
+      <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+        <div class="flex items-center gap-1.5 mb-1">
+          <span class="text-sm">📥</span>
+          <p class="text-xs font-bold text-slate-800">Tham gia phòng đã có</p>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-3">Nhập mã phòng do bạn trong nhóm tạo và gửi cho bạn.</p>
+        <div class="flex gap-2">
+          <input
+            id="join-code-input"
+            type="text"
+            maxlength="8"
+            placeholder="VD: BK2024"
+            oninput="this.value = this.value.toUpperCase()"
+            class="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold tracking-wider text-center focus:outline-none focus:border-slate-800 uppercase"
+          />
+          <button onclick="joinRoom()" class="px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl active:scale-95 transition-transform shrink-0">
+            Vào phòng
+          </button>
+        </div>
+        <div id="join-error" class="hidden text-[11px] text-red-500 font-semibold mt-2 text-center"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= TOP STICKY BAR ================= -->
   <header class="sticky-header border-b border-slate-200 shadow-xs">
     <div class="max-w-xl mx-auto px-3 pt-2 pb-2">
       
+      <!-- Room Info Bar -->
+      <div id="room-bar" class="flex items-center justify-between mb-2 px-2.5 py-1.5 bg-slate-100 rounded-xl border border-slate-200">
+        <div class="flex items-center gap-1.5">
+          <span class="text-[10px] text-slate-500 font-semibold">Phòng:</span>
+          <span id="room-code-display" class="text-xs font-extrabold text-slate-900 tracking-wider bg-white px-2 py-0.5 rounded-lg border border-slate-200">-</span>
+          <button onclick="copyRoomCode()" id="copy-code-btn" class="text-[10px] text-blue-600 hover:text-blue-800 font-bold px-1.5 py-0.5 bg-blue-50 rounded">
+            Sao chép
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="sync-indicator" class="text-[10px] text-slate-500 font-medium flex items-center gap-1">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span> Online
+          </span>
+          <button onclick="leaveRoom()" class="text-[10px] text-slate-500 hover:text-slate-800 font-medium">
+            Đổi phòng
+          </button>
+        </div>
+      </div>
+
       <!-- Top 2 Main Action Buttons + Change File Button -->
       <div class="flex items-center gap-1.5 mb-2">
         <!-- Price per book button -->
@@ -232,15 +303,15 @@
   <div id="upload-modal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 hidden">
     <div class="bg-white w-full max-w-sm rounded-xl p-4 shadow-lg border border-slate-200 max-h-[85vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-1.5">
-        <h3 class="text-xs font-bold text-slate-900">📂 Quản Lý File PDF</h3>
+        <h3 class="text-xs font-bold text-slate-900">⚙️ Quản Lý Phiên Bán Sách</h3>
         <button onclick="closeUploadModal()" class="text-slate-400 hover:text-slate-700 text-sm font-bold p-1">✕</button>
       </div>
 
       <div class="space-y-3">
         <!-- 1. PDF Upload -->
         <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-          <label class="block text-xs font-bold text-slate-800 mb-1">📄 Chọn file PDF mới</label>
-          <p class="text-[11px] text-slate-500 mb-2.5">Hệ thống sẽ tự động trích xuất: STT, Mã SV, Họ & Tên, Mã Lớp.</p>
+          <label class="block text-xs font-bold text-slate-800 mb-1">📄 Nạp file PDF vào phòng hiện tại</label>
+          <p class="text-[11px] text-slate-500 mb-2.5">Trích xuất danh sách mới và đồng bộ ngay lên phòng hiện tại.</p>
           <input 
             type="file" 
             accept=".pdf" 
@@ -252,29 +323,32 @@
           </div>
         </div>
 
-        <!-- 2. Backup / Restore -->
-        <div class="pt-2 border-t border-slate-100 flex flex-col gap-1.5">
-          <div class="flex items-center gap-1.5">
-            <button onclick="backupJSON()" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium">
-              💾 Sao lưu (JSON)
-            </button>
-            <label class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium text-center cursor-pointer">
-              📥 Khôi phục
-              <input type="file" accept=".json" onchange="restoreJSON(this)" class="hidden" />
-            </label>
-          </div>
-          <button onclick="confirmResetAll()" class="w-full py-1 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium border border-red-200">
-            🗑️ Xóa sạch danh sách hiện tại
+        <!-- 2. Room Options -->
+        <div class="pt-2 border-t border-slate-100 flex flex-col gap-2">
+          <button onclick="leaveRoom()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold">
+            🚪 Rời phòng / Đổi sang phòng khác
           </button>
+          
+          <button onclick="confirmEndSession()" class="w-full py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold border border-red-200">
+            🗑️ Kết thúc buổi bán & Xóa dữ liệu Supabase
+          </button>
+          <p class="text-[10px] text-slate-400 text-center">Bấm sau khi đã xuất Excel xong để dọn dẹp bộ nhớ trên Supabase cho lần sau.</p>
         </div>
+      </div>
       </div>
     </div>
   </div>
 
   <!-- ================= JAVASCRIPT ================= -->
   <script>
-    const STORAGE_KEY = 'book_sales_data_v3';
-    const SETTINGS_KEY = 'book_sales_settings_v3';
+    // ===== SUPABASE CONFIG =====
+    const SUPABASE_URL = 'https://deidtcyyaphnzpzgfzcn.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlaWR0Y3l5YXBobnpwemdmemNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NTkzODAsImV4cCI6MjEwNDMzNTM4MH0.HpPSB-Ik0TKNEnrPkg4x54Xq8B1x6auCiDDtv9xIvz4';
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const ROOM_KEY = 'book_sales_room_code_v1';
+    let currentRoomCode = null;
+    let realtimeChannel = null;
 
     let students = [];
     let settings = {
@@ -285,41 +359,263 @@
     let currentEditingStudentId = null;
 
     // Init
-    window.addEventListener('DOMContentLoaded', () => {
-      loadDataFromStorage();
-      renderApp();
+    window.addEventListener('DOMContentLoaded', async () => {
+      const savedRoom = localStorage.getItem(ROOM_KEY);
+      if (savedRoom) {
+        await loadRoom(savedRoom);
+      } else {
+        showLobby();
+      }
     });
 
-    function loadDataFromStorage() {
+    function showLobby() {
+      document.getElementById('lobby-screen').classList.remove('hidden');
+    }
+
+    function hideLobby() {
+      document.getElementById('lobby-screen').classList.add('hidden');
+    }
+
+    function generateRoomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+      }
+      return code;
+    }
+
+    // ===== LOAD ROOM & REALTIME SYNC =====
+    async function loadRoom(code) {
+      code = code.trim().toUpperCase();
       try {
-        const savedStudents = localStorage.getItem(STORAGE_KEY);
-        const savedSettings = localStorage.getItem(SETTINGS_KEY);
-        if (savedStudents) {
-          students = JSON.parse(savedStudents);
+        const { data: sess, error: sessErr } = await db.from('sessions').select('*').eq('id', code).single();
+        if (sessErr || !sess) {
+          localStorage.removeItem(ROOM_KEY);
+          showLobby();
+          return false;
+        }
+
+        currentRoomCode = code;
+        localStorage.setItem(ROOM_KEY, code);
+        settings.pricePerBook = sess.price_per_book || 0;
+
+        const { data: studs } = await db.from('students').select('*').eq('session_id', code).order('stt', { ascending: true });
+        if (studs) {
+          students = studs.map(dbRowToStudent);
         } else {
           students = [];
         }
-        if (savedSettings) {
-          settings = JSON.parse(savedSettings);
-        }
+
+        subscribeRealtime(code);
+        hideLobby();
+        document.getElementById('room-code-display').innerText = code;
+        renderApp();
+        return true;
       } catch (err) {
-        console.error('Lỗi đọc localStorage:', err);
-        students = [];
+        console.error('loadRoom error:', err);
+        showLobby();
+        return false;
       }
     }
 
-    function saveToStorage() {
+    function subscribeRealtime(code) {
+      if (realtimeChannel) {
+        db.removeChannel(realtimeChannel);
+      }
+
+      realtimeChannel = db
+        .channel('room-' + code)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'students', filter: 'session_id=eq.' + code }, (payload) => {
+          flashSyncIndicator();
+          if (payload.eventType === 'UPDATE') {
+            const updated = dbRowToStudent(payload.new);
+            const idx = students.findIndex(s => s.id === updated.id);
+            if (idx >= 0) {
+              students[idx] = updated;
+            } else {
+              students.push(updated);
+            }
+            renderList();
+          } else if (payload.eventType === 'INSERT') {
+            const inserted = dbRowToStudent(payload.new);
+            if (!students.find(s => s.id === inserted.id)) {
+              students.push(inserted);
+              students.sort((a, b) => (a.stt || 0) - (b.stt || 0));
+            }
+            renderList();
+          } else if (payload.eventType === 'DELETE') {
+            students = students.filter(s => s.id !== payload.old.id);
+            renderList();
+          }
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sessions', filter: 'id=eq.' + code }, (payload) => {
+          flashSyncIndicator();
+          if (payload.new && typeof payload.new.price_per_book !== 'undefined') {
+            settings.pricePerBook = payload.new.price_per_book || 0;
+            updateStats();
+          }
+        })
+        .subscribe();
+    }
+
+    function flashSyncIndicator() {
+      const tag = document.getElementById('save-tag');
+      if (tag) {
+        tag.innerText = '⚡ Vừa đồng bộ';
+        tag.className = 'text-blue-600 font-bold';
+        setTimeout(() => {
+          tag.innerText = '✓ Đã đồng bộ';
+          tag.className = 'text-emerald-700 font-semibold';
+        }, 1500);
+      }
+    }
+
+    function dbRowToStudent(row) {
+      return {
+        id: row.id,
+        stt: row.stt,
+        studentCode: row.student_code,
+        fullName: row.full_name,
+        classCode: row.class_code,
+        phone: row.phone || '',
+        ghiChu: row.ghi_chu || '',
+        paymentMethod: row.payment_method || null,
+        otherReason: row.other_reason || null,
+        paymentTime: row.payment_time || null
+      };
+    }
+
+    function studentToDbRow(s, roomCode) {
+      return {
+        id: s.id,
+        session_id: roomCode,
+        stt: s.stt,
+        student_code: s.studentCode,
+        full_name: s.fullName,
+        class_code: s.classCode,
+        phone: s.phone || '',
+        ghi_chu: s.ghiChu || '',
+        payment_method: s.paymentMethod || null,
+        other_reason: s.otherReason || null,
+        payment_time: s.paymentTime || null,
+        updated_at: new Date().toISOString()
+      };
+    }
+
+    async function createRoomFromPDF(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const loading = document.getElementById('lobby-loading');
+      loading.classList.remove('hidden');
+
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-        
-        const tag = document.getElementById('save-tag');
-        if (tag) {
-          tag.innerText = '✓ Đã lưu tự động';
+        const parsed = await parsePDF(file);
+        if (!parsed || parsed.length === 0) {
+          alert('Không tìm thấy danh sách sinh viên hợp lệ trong file PDF!');
+          return;
+        }
+
+        const code = generateRoomCode();
+        const { error: sessErr } = await db.from('sessions').insert({ id: code, price_per_book: 0 });
+        if (sessErr) throw sessErr;
+
+        const rows = parsed.map(s => studentToDbRow(s, code));
+        const { error: studErr } = await db.from('students').insert(rows);
+        if (studErr) throw studErr;
+
+        await loadRoom(code);
+        alert(`🎉 Đã tạo phòng thành công!\n\nMã phòng: ${code}\n\nHãy gửi mã này cho các bạn khác trong nhóm để cùng vào bán sách nhé!`);
+      } catch (err) {
+        console.error(err);
+        alert('Lỗi tạo phòng: ' + err.message);
+      } finally {
+        loading.classList.add('hidden');
+        input.value = '';
+      }
+    }
+
+    async function joinRoom() {
+      const input = document.getElementById('join-code-input');
+      const errEl = document.getElementById('join-error');
+      const code = input.value.trim().toUpperCase();
+
+      errEl.classList.add('hidden');
+      if (!code) {
+        errEl.innerText = 'Vui lòng nhập mã phòng!';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      const ok = await loadRoom(code);
+      if (!ok) {
+        errEl.innerText = `Không tìm thấy phòng "${code}". Vui lòng kiểm tra lại!`;
+        errEl.classList.remove('hidden');
+      }
+    }
+
+    function copyRoomCode() {
+      if (!currentRoomCode) return;
+      navigator.clipboard.writeText(currentRoomCode).then(() => {
+        const btn = document.getElementById('copy-code-btn');
+        btn.innerText = '✓ Đã chép';
+        setTimeout(() => { btn.innerText = 'Sao chép'; }, 1500);
+      });
+    }
+
+    function leaveRoom() {
+      if (realtimeChannel) db.removeChannel(realtimeChannel);
+      localStorage.removeItem(ROOM_KEY);
+      currentRoomCode = null;
+      students = [];
+      closeUploadModal();
+      showLobby();
+    }
+
+    async function confirmEndSession() {
+      if (!currentRoomCode) return;
+      if (!confirm(`Bạn có chắc muốn kết thúc và XÓA TOÀN BỘ dữ liệu của phòng "${currentRoomCode}" trên Supabase?\n\n(Hãy chắc chắn rằng bạn đã bấm Xuất Excel rồi nhé!)`)) {
+        return;
+      }
+
+      try {
+        await db.from('sessions').delete().eq('id', currentRoomCode);
+        if (realtimeChannel) db.removeChannel(realtimeChannel);
+        localStorage.removeItem(ROOM_KEY);
+        currentRoomCode = null;
+        students = [];
+        closeUploadModal();
+        showLobby();
+        alert('Đã xóa sạch dữ liệu phòng trên Supabase thành công!');
+      } catch (err) {
+        alert('Lỗi khi xóa: ' + err.message);
+      }
+    }
+
+    async function syncStudentUpdate(student) {
+      if (!currentRoomCode) return;
+      const tag = document.getElementById('save-tag');
+      if (tag) {
+        tag.innerText = '⏳ Đang lưu...';
+        tag.className = 'text-blue-600 font-semibold';
+      }
+
+      const { error } = await db.from('students').update({
+        payment_method: student.paymentMethod || null,
+        other_reason: student.otherReason || null,
+        payment_time: student.paymentTime || null,
+        updated_at: new Date().toISOString()
+      }).eq('id', student.id);
+
+      if (tag) {
+        if (error) {
+          tag.innerText = '❌ Lỗi lưu';
+          tag.className = 'text-red-600 font-semibold';
+        } else {
+          tag.innerText = '✓ Đã đồng bộ';
           tag.className = 'text-emerald-700 font-semibold';
         }
-      } catch (err) {
-        console.error('Lỗi ghi localStorage:', err);
       }
     }
 
@@ -557,7 +853,6 @@
       if (!student) return;
 
       if (student.paymentMethod === option) {
-        // Toggle off
         student.paymentMethod = null;
         student.paymentTime = null;
         student.otherReason = null;
@@ -567,7 +862,7 @@
         student.otherReason = null;
       }
 
-      saveToStorage();
+      syncStudentUpdate(student);
       renderList();
     }
 
@@ -576,11 +871,10 @@
       if (!student) return;
 
       if (student.paymentMethod === 'other') {
-        // Toggle off if clicked again
         student.paymentMethod = null;
         student.paymentTime = null;
         student.otherReason = null;
-        saveToStorage();
+        syncStudentUpdate(student);
         renderList();
       } else {
         openOtherModal(id);
@@ -620,7 +914,7 @@
       student.otherReason = reason;
       student.paymentTime = getNowFormatted();
 
-      saveToStorage();
+      syncStudentUpdate(student);
       closeOtherModal();
       renderList();
     }
@@ -634,7 +928,7 @@
       student.otherReason = null;
       student.paymentTime = null;
 
-      saveToStorage();
+      syncStudentUpdate(student);
       closeOtherModal();
       renderList();
     }
@@ -678,14 +972,17 @@
       document.getElementById('price-modal').classList.add('hidden');
     }
 
-    function savePriceSetting() {
+    async function savePriceSetting() {
       const input = document.getElementById('price-input').value;
       const cleanNum = input.replace(/\D/g, '');
       const val = parseInt(cleanNum, 10);
       settings.pricePerBook = isNaN(val) ? 0 : val;
-      saveToStorage();
       closePriceModal();
       updateStats();
+
+      if (currentRoomCode) {
+        await db.from('sessions').update({ price_per_book: settings.pricePerBook }).eq('id', currentRoomCode);
+      }
     }
 
     // Modal Upload PDF
@@ -698,11 +995,6 @@
     }
 
     // ================= EXPORT TO EXCEL =================
-    // Cột ghi nhận thanh toán:
-    // 1. "Đã thanh toán" (Tiền mặt / Chuyển khoản)
-    // 2. "Chưa thanh toán" (Nhận chưa trả / Chưa xử lý)
-    // 3. Lý do trong ô Khác (Ví dụ: "Đã có sách", "Không mua",...)
-    // Cột Thanh toán: "Tiền mặt" hoặc "Chuyển khoản"
     function exportToExcel() {
       if (!students || students.length === 0) {
         alert('Danh sách đang trống, hãy tải file PDF lên trước!');
@@ -748,7 +1040,7 @@
         'STT': 'TỔNG KẾT',
         'Mã sinh viên': '',
         'Họ và Tên': `Tổng: ${students.length} sinh viên`,
-        'Mã lớp': '',
+        'Mã lớp': currentRoomCode ? `Phòng: ${currentRoomCode}` : '',
         'Ghi nhận mua sách': `Đã thu: ${cashCount + transferCount} | Nhận chưa trả: ${unpaidRecCount} | Khác: ${otherCount}`,
         'Thanh toán': `Tiền mặt: ${cashCount} | CK: ${transferCount}`,
         'SĐT liên lạc': '',
@@ -771,7 +1063,7 @@
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Ban_Sach');
 
       const now = new Date();
-      const filename = `Danh_Sach_Ban_Sach_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.xlsx`;
+      const filename = `Danh_Sach_Ban_Sach_${currentRoomCode || ''}_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.xlsx`;
       XLSX.writeFile(workbook, filename);
     }
 
@@ -786,72 +1078,26 @@
       if (emptyLoading) emptyLoading.classList.remove('hidden');
 
       try {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        
-        let allExtractedLines = [];
-
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          const page = await pdf.getPage(pageNum);
-          const textContent = await page.getTextContent();
-          
-          // Filter non-empty text items
-          const items = textContent.items
-            .map(it => ({
-              x: it.transform[4],
-              y: it.transform[5],
-              text: it.str.trim()
-            }))
-            .filter(it => it.text.length > 0);
-
-          // Sort items: Top to bottom, then Left to right
-          items.sort((a, b) => {
-            if (Math.abs(a.y - b.y) > 8) {
-              return b.y - a.y;
-            }
-            return a.x - b.x;
-          });
-
-          // Cluster into rows with 8px threshold (wide enough to capture SĐT + CCCD cols)
-          const rows = [];
-          let currentRow = [];
-          let currentY = null;
-
-          items.forEach(it => {
-            if (currentY === null || Math.abs(it.y - currentY) <= 8) {
-              currentRow.push(it);
-              if (currentY === null) currentY = it.y;
-            } else {
-              currentRow.sort((a, b) => a.x - b.x);
-              rows.push(currentRow.map(r => r.text).join(' '));
-              currentRow = [it];
-              currentY = it.y;
-            }
-          });
-
-          if (currentRow.length > 0) {
-            currentRow.sort((a, b) => a.x - b.x);
-            rows.push(currentRow.map(r => r.text).join(' '));
-          }
-
-          // Post-merge: nếu dòng chỉ có số (SĐT/CCCD tách ra), ghép vào dòng trước
-          const mergedRows = [];
-          rows.forEach(row => {
-            const toks = row.trim().split(/\s+/);
-            const allNumbers = toks.every(t => /^\d+$/.test(t));
-            if (allNumbers && mergedRows.length > 0) {
-              mergedRows[mergedRows.length - 1] += ' ' + row.trim();
-            } else {
-              mergedRows.push(row);
-            }
-          });
-
-          allExtractedLines.push(...mergedRows);
+        const parsed = await parsePDF(file);
+        if (!parsed || parsed.length === 0) {
+          alert('Không tìm thấy sinh viên hợp lệ trong file PDF!');
+          return;
         }
 
-        parseExtractedLines(allExtractedLines);
+        if (!currentRoomCode) {
+          const code = generateRoomCode();
+          await db.from('sessions').insert({ id: code, price_per_book: settings.pricePerBook || 0 });
+          currentRoomCode = code;
+        }
+
+        // Replace students in current room
+        await db.from('students').delete().eq('session_id', currentRoomCode);
+        const rows = parsed.map(s => studentToDbRow(s, currentRoomCode));
+        await db.from('students').insert(rows);
+
         closeUploadModal();
-        alert(`Đã trích xuất ${students.length} sinh viên từ file PDF!`);
+        await loadRoom(currentRoomCode);
+        alert(`Đã trích xuất chính xác ${parsed.length} sinh viên và tải lên phòng ${currentRoomCode}!`);
       } catch (err) {
         console.error('PDF error:', err);
         alert('Lỗi khi đọc file PDF: ' + err.message);
@@ -860,6 +1106,68 @@
         if (emptyLoading) emptyLoading.classList.add('hidden');
         input.value = '';
       }
+    }
+
+    async function parsePDF(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const allExtractedLines = [];
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        
+        const items = textContent.items
+          .map(it => ({
+            x: it.transform[4],
+            y: it.transform[5],
+            text: it.str.trim()
+          }))
+          .filter(it => it.text.length > 0);
+
+        items.sort((a, b) => {
+          if (Math.abs(a.y - b.y) > 8) {
+            return b.y - a.y;
+          }
+          return a.x - b.x;
+        });
+
+        const rows = [];
+        let currentRow = [];
+        let currentY = null;
+
+        items.forEach(it => {
+          if (currentY === null || Math.abs(it.y - currentY) <= 8) {
+            currentRow.push(it);
+            if (currentY === null) currentY = it.y;
+          } else {
+            currentRow.sort((a, b) => a.x - b.x);
+            rows.push(currentRow.map(r => r.text).join(' '));
+            currentRow = [it];
+            currentY = it.y;
+          }
+        });
+
+        if (currentRow.length > 0) {
+          currentRow.sort((a, b) => a.x - b.x);
+          rows.push(currentRow.map(r => r.text).join(' '));
+        }
+
+        const mergedRows = [];
+        rows.forEach(row => {
+          const toks = row.trim().split(/\s+/);
+          const allNumbers = toks.every(t => /^\d+$/.test(t));
+          if (allNumbers && mergedRows.length > 0) {
+            mergedRows[mergedRows.length - 1] += ' ' + row.trim();
+          } else {
+            mergedRows.push(row);
+          }
+        });
+
+        allExtractedLines.push(...mergedRows);
+      }
+
+      return parseExtractedLines(allExtractedLines);
     }
 
     function parseExtractedLines(lines) {
@@ -871,7 +1179,6 @@
         if (!clean) return;
 
         const lower = clean.toLowerCase();
-        // Skip header / footer lines
         if (
           lower.includes('họ và tên') ||
           lower.includes('mã sinh viên') ||
@@ -890,26 +1197,19 @@
           return;
         }
 
-        // Split by whitespace into tokens
         const tokens = clean.split(/\s+/);
         if (tokens.length < 4) return;
 
-        // === Token 0: STT (1-3 digits only) ===
         if (!/^\d{1,3}$/.test(tokens[0])) return;
         const stt = parseInt(tokens[0], 10);
         if (stt < 1 || stt > 500) return;
 
-        // === Token 1: MSSV (pure ASCII alphanumeric, not a phone) ===
         const mssv = tokens[1];
         if (!/^[A-Za-z0-9]{5,15}$/.test(mssv)) return;
-        if (/^0[3-9]\d{8}$/.test(mssv)) return; // skip phone
-        if (/^\d{9,12}$/.test(mssv)) return;     // skip all-digit (CCCD)
+        if (/^0[3-9]\d{8}$/.test(mssv)) return;
+        if (/^\d{9,12}$/.test(mssv)) return;
         if (seenCodes.has(mssv)) return;
 
-        // === Find classCode: first token after MSSV that has BOTH letters AND digits ===
-        // Real class codes: DH27TH2, DH26PM (contain letters+digits)
-        // Vietnamese name parts: Trung, Thanh, An... (letters ONLY, no digit)
-        // Phone numbers: 0364479394 (digits only)
         let classCodeIdx = -1;
         for (let i = 2; i < tokens.length; i++) {
           const tok = tokens[i];
@@ -926,22 +1226,18 @@
 
         if (classCodeIdx < 2) return;
 
-        // Full name = all tokens between MSSV and classCode
         const fullName = tokens.slice(2, classCodeIdx).join(' ').trim();
         if (!fullName) return;
 
         const classCode = tokens[classCodeIdx];
 
-        // Extract phone (10 digits) and CCCD/GhiChu (12 digits) from remaining tokens
         const remaining = tokens.slice(classCodeIdx + 1);
         let phone = '';
         let ghiChu = '';
         remaining.forEach(tok => {
           if (/^0[35789]\d{8}$/.test(tok)) {
-            // SĐT Việt Nam: đúng 10 số, bắt đầu 03x/05x/07x/08x/09x
             if (!phone) phone = tok;
           } else if (/^\d{12}$/.test(tok)) {
-            // CCCD: đúng 12 số
             if (!ghiChu) ghiChu = tok;
           }
         });
@@ -961,54 +1257,7 @@
         });
       });
 
-      if (parsed.length > 0) {
-        students = parsed;
-        saveToStorage();
-        renderApp();
-      } else {
-        alert('Không tìm thấy danh sách sinh viên hợp lệ trong file PDF!\nVui lòng thử dán nội dung thủ công.');
-      }
-    }
-
-    function backupJSON() {
-      const data = { students, settings, backupTime: new Date().toISOString() };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Backup_Ban_Sach_${Date.now()}.json`;
-      a.click();
-    }
-
-    function restoreJSON(input) {
-      const file = input.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = JSON.parse(e.target.result);
-          if (data.students && Array.isArray(data.students)) {
-            students = data.students;
-            if (data.settings) settings = data.settings;
-            saveToStorage();
-            renderApp();
-            closeUploadModal();
-            alert('Khôi phục dữ liệu thành công!');
-          }
-        } catch (err) {
-          alert('Lỗi: ' + err.message);
-        }
-      };
-      reader.readAsText(file);
-    }
-
-    function confirmResetAll() {
-      if (confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu hiện tại không?')) {
-        students = [];
-        saveToStorage();
-        renderApp();
-        closeUploadModal();
-      }
+      return parsed;
     }
   </script>
 </body>
