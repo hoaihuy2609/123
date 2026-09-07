@@ -904,7 +904,7 @@
           const isAsciiAlphanumeric = /^[A-Za-z0-9]{3,15}$/.test(tok);
           const hasLetter = /[A-Za-z]/.test(tok);
           const hasDigit = /\d/.test(tok);
-          const isPhone = /^0[3-9]\d{8}$/.test(tok) || /^\d{9,12}$/.test(tok);
+          const isPhone = /^0[35789]\d{8}$/.test(tok) || /^\d{12}$/.test(tok);
 
           if (isAsciiAlphanumeric && hasLetter && hasDigit && !isPhone) {
             classCodeIdx = i;
@@ -920,14 +920,16 @@
 
         const classCode = tokens[classCodeIdx];
 
-        // Extract phone and CCCD/GhiChu from remaining tokens
+        // Extract phone (10 digits) and CCCD/GhiChu (12 digits) from remaining tokens
         const remaining = tokens.slice(classCodeIdx + 1);
         let phone = '';
         let ghiChu = '';
         remaining.forEach(tok => {
-          if (/^0[3-9]\d{8}$/.test(tok) || /^0\d{10,11}$/.test(tok)) {
+          if (/^0[35789]\d{8}$/.test(tok)) {
+            // SĐT Việt Nam: đúng 10 số, bắt đầu 03x/05x/07x/08x/09x
             if (!phone) phone = tok;
-          } else if (/^\d{9,12}$/.test(tok)) {
+          } else if (/^\d{12}$/.test(tok)) {
+            // CCCD: đúng 12 số
             if (!ghiChu) ghiChu = tok;
           }
         });
