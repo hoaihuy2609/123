@@ -709,21 +709,16 @@
         return;
       }
 
-      const price = settings.pricePerBook || 0;
-
       const dataRows = students.map((s, idx) => {
         let ghiNhanMuaSach = 'Chưa thanh toán';
         let cachThanhToan = '';
-        let soTienStr = '';
 
         if (s.paymentMethod === 'cash') {
           ghiNhanMuaSach = 'Đã thanh toán';
           cachThanhToan = 'Tiền mặt';
-          soTienStr = price ? formatNumberWithDots(price) : '';
         } else if (s.paymentMethod === 'transfer') {
           ghiNhanMuaSach = 'Đã thanh toán';
           cachThanhToan = 'Chuyển khoản';
-          soTienStr = price ? formatNumberWithDots(price) : '';
         } else if (s.paymentMethod === 'unpaid_received') {
           ghiNhanMuaSach = 'Chưa thanh toán (Đã nhận)';
         } else if (s.paymentMethod === 'other') {
@@ -737,7 +732,6 @@
           'Mã lớp': s.classCode || '',
           'Ghi nhận mua sách': ghiNhanMuaSach,
           'Thanh toán': cachThanhToan,
-          'Số Tiền (VNĐ)': soTienStr,
           'SĐT liên lạc': s.phone || '',
           'Ghi chú': s.ghiChu || ''
         };
@@ -747,7 +741,6 @@
       const transferCount = students.filter(s => s.paymentMethod === 'transfer').length;
       const unpaidRecCount = students.filter(s => s.paymentMethod === 'unpaid_received').length;
       const otherCount = students.filter(s => s.paymentMethod === 'other').length;
-      const totalMoney = (cashCount + transferCount) * price;
 
       // Summary Row
       dataRows.push({});
@@ -758,7 +751,6 @@
         'Mã lớp': '',
         'Ghi nhận mua sách': `Đã thu: ${cashCount + transferCount} | Nhận chưa trả: ${unpaidRecCount} | Khác: ${otherCount}`,
         'Thanh toán': `Tiền mặt: ${cashCount} | CK: ${transferCount}`,
-        'Số Tiền (VNĐ)': totalMoney ? formatNumberWithDots(totalMoney) : '',
         'SĐT liên lạc': '',
         'Ghi chú': `Xuất lúc: ${getNowFormatted()}`
       });
@@ -771,7 +763,6 @@
         { wch: 12 }, // Lop
         { wch: 28 }, // Ghi nhan mua sach
         { wch: 16 }, // Thanh toan
-        { wch: 16 }, // So tien
         { wch: 16 }, // SDT
         { wch: 16 }, // Ghi chu
       ];
