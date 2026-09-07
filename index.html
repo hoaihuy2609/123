@@ -3,11 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Bán Sách - Điểm Danh & Thu Tiền</title>
+  <title>Quản Lý Bán Sách</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- SheetJS (xlsx) CDN for Excel Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- PDF.js CDN for PDF reading -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
   <style>
     * {
       -webkit-tap-highlight-color: transparent;
@@ -36,23 +41,28 @@
 
   <!-- ================= TOP STICKY BAR ================= -->
   <header class="sticky-header border-b border-slate-200 shadow-xs">
-    <div class="max-w-xl mx-auto px-3 pt-2.5 pb-2">
+    <div class="max-w-xl mx-auto px-3 pt-2 pb-2">
       
-      <!-- Top 2 Main Action Buttons (Enlarged) -->
-      <div class="grid grid-cols-2 gap-2 mb-2">
+      <!-- Top 2 Main Action Buttons + Change File Button -->
+      <div class="flex items-center gap-1.5 mb-2">
         <!-- Price per book button -->
-        <button onclick="openPriceModal()" class="touch-btn py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-800 text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 shadow-2xs transition-all">
+        <button onclick="openPriceModal()" class="touch-btn flex-1 py-2 px-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-800 text-xs sm:text-sm font-bold flex items-center justify-center gap-1 shadow-2xs transition-all truncate">
           <span>🏷️</span> <span id="price-display">Đặt giá sách</span>
         </button>
 
         <!-- Export Excel button -->
-        <button onclick="exportToExcel()" class="touch-btn py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-black active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all">
+        <button onclick="exportToExcel()" class="touch-btn flex-1 py-2 px-2.5 rounded-xl bg-slate-900 hover:bg-black active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-1 shadow-sm transition-all truncate">
           <span>📥 Xuất Excel</span>
+        </button>
+
+        <!-- Change/Upload PDF button -->
+        <button onclick="openUploadModal()" class="touch-btn p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-semibold flex items-center justify-center shadow-2xs shrink-0" title="Tải file PDF khác">
+          📂
         </button>
       </div>
 
       <!-- 3 STATS CARDS: Tiền mặt | Chuyển khoản | Tổng tiền đã thu -->
-      <div class="grid grid-cols-3 gap-1.5 mb-2">
+      <div class="grid grid-cols-3 gap-1.5 mb-1.5">
         <!-- Tiền mặt -->
         <div class="bg-white p-2 rounded-lg border border-slate-200 text-center">
           <div class="text-[10px] font-medium text-slate-500">💵 Tiền mặt (<span id="count-cash">0</span>)</div>
@@ -72,13 +82,20 @@
         </div>
       </div>
 
+      <!-- Secondary Mini Stats: Nhận chưa trả & Khác -->
+      <div class="flex items-center justify-between px-1 mb-1.5 text-[10px] text-slate-500 font-medium">
+        <span>⏳ Nhận chưa trả: <b id="count-unpaid-rec" class="text-amber-700 font-bold">0</b></span>
+        <span>✏️ Khác/Không mua: <b id="count-other" class="text-slate-700 font-bold">0</b></span>
+        <span id="save-tag" class="text-emerald-700 font-semibold">✓ Đã lưu tự động</span>
+      </div>
+
       <!-- Search Input -->
       <div class="relative flex items-center mb-1.5">
         <span class="absolute left-2.5 text-slate-400 text-xs">🔍</span>
         <input 
           type="text" 
           id="search-input" 
-          placeholder="Tìm theo tên, MSSV, mã lớp..." 
+          placeholder="Tìm tên, MSSV, mã lớp, lý do..." 
           oninput="handleSearch(this.value)"
           class="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:outline-none focus:border-slate-800 focus:ring-0 placeholder:text-slate-400"
         />
@@ -92,18 +109,24 @@
       </div>
 
       <!-- Filter Tabs -->
-      <div class="flex items-center gap-1 overflow-x-auto custom-scroll text-[11px]">
+      <div class="flex items-center gap-1 overflow-x-auto custom-scroll text-[11px] pb-0.5">
         <button onclick="setFilter('all')" id="filter-all" class="filter-btn px-2.5 py-0.5 rounded-full font-semibold transition-all bg-slate-900 text-white shrink-0">
           Tất cả (<span id="count-all">0</span>)
         </button>
-        <button onclick="setFilter('unpaid')" id="filter-unpaid" class="filter-btn px-2.5 py-0.5 rounded-full font-medium transition-all bg-white border border-slate-200 text-slate-600 shrink-0">
-          Chưa thu (<span id="count-unpaid">0</span>)
+        <button onclick="setFilter('pending')" id="filter-pending" class="filter-btn px-2.5 py-0.5 rounded-full font-medium transition-all bg-white border border-slate-200 text-slate-600 shrink-0">
+          Chưa xử lý (<span id="count-pending">0</span>)
         </button>
         <button onclick="setFilter('cash')" id="filter-cash" class="filter-btn px-2.5 py-0.5 rounded-full font-medium transition-all bg-white border border-slate-200 text-slate-600 shrink-0">
-          Tiền mặt
+          Tiền mặt (<span id="count-cash-tab">0</span>)
         </button>
         <button onclick="setFilter('transfer')" id="filter-transfer" class="filter-btn px-2.5 py-0.5 rounded-full font-medium transition-all bg-white border border-slate-200 text-slate-600 shrink-0">
-          Chuyển khoản
+          CK (<span id="count-transfer-tab">0</span>)
+        </button>
+        <button onclick="setFilter('unpaid_received')" id="filter-unpaid_received" class="filter-btn px-2.5 py-0.5 rounded-full font-medium transition-all bg-white border border-slate-200 text-slate-600 shrink-0">
+          Nhận chưa trả (<span id="count-unpaid-tab">0</span>)
+        </button>
+        <button onclick="setFilter('other')" id="filter-other" class="filter-btn px-2.5 py-0.5 rounded-full font-medium transition-all bg-white border border-slate-200 text-slate-600 shrink-0">
+          Khác (<span id="count-other-tab">0</span>)
         </button>
       </div>
 
@@ -112,9 +135,25 @@
 
   <!-- ================= MAIN STUDENT LIST ================= -->
   <main class="flex-1 max-w-xl w-full mx-auto px-3 py-2">
-    <!-- List -->
+    <!-- List container -->
     <div id="student-list" class="space-y-1.5 pb-20">
       <!-- Items generated here -->
+    </div>
+
+    <!-- Empty State (No file uploaded yet) -->
+    <div id="empty-state" class="hidden text-center py-12 px-4 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 my-4">
+      <div class="text-4xl mb-2">📂</div>
+      <p class="text-slate-800 font-bold text-sm">Chưa có danh sách sinh viên</p>
+      <p class="text-slate-500 text-xs mt-1 mb-4 max-w-xs mx-auto">Tải file PDF danh sách của bạn lên để hệ thống tự động trích xuất STT, Mã SV, Họ & Tên, Lớp.</p>
+      
+      <label class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer active:scale-95 transition-transform">
+        <span>📄 Tải File PDF Danh Sách</span>
+        <input type="file" accept=".pdf" onchange="handlePDFUpload(this)" class="hidden" />
+      </label>
+
+      <div id="empty-loading" class="hidden text-xs text-blue-600 font-semibold mt-3">
+        ⏳ Đang đọc và trích xuất dữ liệu từ PDF...
+      </div>
     </div>
 
     <!-- Search Not Found State -->
@@ -127,7 +166,7 @@
   <div id="price-modal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 hidden">
     <div class="bg-white w-full max-w-xs rounded-xl p-4 shadow-lg border border-slate-200">
       <h3 class="text-xs font-bold text-slate-900 mb-1">🏷️ Cài đặt giá tiền mỗi cuốn</h3>
-      <p class="text-[11px] text-slate-500 mb-3">Nhập giá 1 cuốn để tự động tính tổng tiền:</p>
+      <p class="text-[11px] text-slate-500 mb-3">Nhập giá 1 cuốn sách (tự động tính tổng tiền):</p>
       
       <div class="relative mb-3">
         <input 
@@ -152,37 +191,80 @@
     </div>
   </div>
 
-  <!-- ================= MODAL: TÙY CHỌN & SAO LƯU ================= -->
-  <div id="import-modal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 hidden">
+  <!-- ================= MODAL: NHẬP LÝ DO KHÁC ================= -->
+  <div id="other-modal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-xs rounded-xl p-4 shadow-lg border border-slate-200">
+      <h3 class="text-xs font-bold text-slate-900 mb-1">✏️ Ghi chú lý do khác</h3>
+      <p class="text-[11px] text-slate-500 mb-2">Sinh viên: <b id="other-modal-student" class="text-slate-800"></b></p>
+      
+      <!-- Quick Reason Chips -->
+      <div class="flex flex-wrap gap-1 mb-2.5">
+        <button type="button" onclick="setQuickReason('Đã có sách')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-medium">Đã có sách</button>
+        <button type="button" onclick="setQuickReason('Không mua')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-medium">Không mua</button>
+        <button type="button" onclick="setQuickReason('Nghỉ học')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-medium">Nghỉ học</button>
+        <button type="button" onclick="setQuickReason('Vắng mặt')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-medium">Vắng mặt</button>
+      </div>
+
+      <div class="mb-3">
+        <textarea 
+          id="other-reason-input" 
+          rows="2" 
+          placeholder="Nhập lý do tại sao không mua..."
+          class="w-full p-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-slate-800"
+        ></textarea>
+      </div>
+
+      <div class="flex items-center gap-1.5">
+        <button onclick="clearOtherReason()" class="py-1.5 px-2.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-medium">
+          Xóa
+        </button>
+        <button onclick="closeOtherModal()" class="flex-1 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium">
+          Hủy
+        </button>
+        <button onclick="saveOtherReason()" class="flex-1 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold">
+          Lưu
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: TẢI FILE PDF MỚI / ĐỔI FILE ================= -->
+  <div id="upload-modal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 hidden">
     <div class="bg-white w-full max-w-sm rounded-xl p-4 shadow-lg border border-slate-200 max-h-[85vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-1.5">
-        <h3 class="text-xs font-bold text-slate-900">⚙️ Cài Đặt & Quản Lý</h3>
-        <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-700 text-sm font-bold p-1">✕</button>
+        <h3 class="text-xs font-bold text-slate-900">📂 Quản Lý File PDF</h3>
+        <button onclick="closeUploadModal()" class="text-slate-400 hover:text-slate-700 text-sm font-bold p-1">✕</button>
       </div>
 
       <div class="space-y-3">
-        <!-- 1. Reset to original 67 students -->
-        <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-          <label class="block text-xs font-bold text-slate-800 mb-1">🔄 Danh sách gốc PDF</label>
-          <p class="text-[11px] text-slate-500 mb-2">Đã tích hợp sẵn 67 sinh viên từ file PDF của cô.</p>
-          <button onclick="resetToOriginalPDF()" class="w-full py-1.5 bg-slate-900 hover:bg-black text-white rounded text-xs font-semibold">
-            Nạp lại 67 sinh viên gốc
-          </button>
+        <!-- 1. PDF Upload -->
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <label class="block text-xs font-bold text-slate-800 mb-1">📄 Chọn file PDF mới</label>
+          <p class="text-[11px] text-slate-500 mb-2.5">Hệ thống sẽ tự động trích xuất: STT, Mã SV, Họ & Tên, Mã Lớp.</p>
+          <input 
+            type="file" 
+            accept=".pdf" 
+            onchange="handlePDFUpload(this)"
+            class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-900 file:text-white cursor-pointer"
+          />
+          <div id="modal-pdf-loading" class="hidden text-[11px] text-blue-600 font-semibold mt-2">
+            ⏳ Đang xử lý file PDF...
+          </div>
         </div>
 
         <!-- 2. Backup / Restore -->
         <div class="pt-2 border-t border-slate-100 flex flex-col gap-1.5">
           <div class="flex items-center gap-1.5">
-            <button onclick="backupJSON()" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium">
+            <button onclick="backupJSON()" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium">
               💾 Sao lưu (JSON)
             </button>
-            <label class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium text-center cursor-pointer">
+            <label class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium text-center cursor-pointer">
               📥 Khôi phục
               <input type="file" accept=".json" onchange="restoreJSON(this)" class="hidden" />
             </label>
           </div>
-          <button onclick="clearAllPaymentMarks()" class="w-full py-1 text-amber-700 hover:bg-amber-50 rounded text-xs font-medium border border-amber-200">
-            🧹 Xóa toàn bộ tick & tiền đã thu (giữ nguyên tên)
+          <button onclick="confirmResetAll()" class="w-full py-1 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium border border-red-200">
+            🗑️ Xóa sạch danh sách hiện tại
           </button>
         </div>
       </div>
@@ -191,749 +273,8 @@
 
   <!-- ================= JAVASCRIPT ================= -->
   <script>
-    // Embedded 67 Students extracted directly from PDF
-    const ORIGINAL_STUDENTS = [
-  {
-    "id": "sv_1_DPM259999",
-    "stt": 1,
-    "studentCode": "DPM259999",
-    "fullName": "Ngô Lê Thiên Lộc",
-    "classCode": "DH26PM",
-    "phone": "...",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_2_IFT626005",
-    "stt": 2,
-    "studentCode": "IFT626005",
-    "fullName": "Lâm Quốc Anh",
-    "classCode": "DH27TH2",
-    "phone": "0364479394",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_3_IFT626011",
-    "stt": 3,
-    "studentCode": "IFT626011",
-    "fullName": "Huỳnh Đức Anh",
-    "classCode": "DH27TH2",
-    "phone": "0392777460",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_4_IFT626014",
-    "stt": 4,
-    "studentCode": "IFT626014",
-    "fullName": "Phạm Quốc Bảo",
-    "classCode": "DH27TH2",
-    "phone": "0384005585",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_5_IFT626017",
-    "stt": 5,
-    "studentCode": "IFT626017",
-    "fullName": "Lưu Quốc Bửu",
-    "classCode": "DH27TH2",
-    "phone": "0888092128",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_6_IFT626021",
-    "stt": 6,
-    "studentCode": "IFT626021",
-    "fullName": "Nguyễn Trần Trung Chiến",
-    "classCode": "DH27TH2",
-    "phone": "0906266884",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_7_IFT626029",
-    "stt": 7,
-    "studentCode": "IFT626029",
-    "fullName": "Lý Thành Đạt",
-    "classCode": "DH27TH2",
-    "phone": "0867747617",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_8_IFT626033",
-    "stt": 8,
-    "studentCode": "IFT626033",
-    "fullName": "Bùi Thanh Đạt",
-    "classCode": "DH27TH2",
-    "phone": "0766986205",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_9_IFT626035",
-    "stt": 9,
-    "studentCode": "IFT626035",
-    "fullName": "Nguyễn Rạng Đông",
-    "classCode": "DH27TH2",
-    "phone": "0333052692",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_10_IFT626036",
-    "stt": 10,
-    "studentCode": "IFT626036",
-    "fullName": "Lê Hữu Đức",
-    "classCode": "DH27TH2",
-    "phone": "0358996452",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_11_IFT626042",
-    "stt": 11,
-    "studentCode": "IFT626042",
-    "fullName": "Nguyễn Tấn Dương",
-    "classCode": "DH27TH2",
-    "phone": "0837280272",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_12_IFT626046",
-    "stt": 12,
-    "studentCode": "IFT626046",
-    "fullName": "Tạ Đại Phú Gia",
-    "classCode": "DH27TH2",
-    "phone": "0888690971",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_13_IFT626048",
-    "stt": 13,
-    "studentCode": "IFT626048",
-    "fullName": "Nguyễn Thành Hải",
-    "classCode": "DH27TH2",
-    "phone": "0342709355",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_14_IFT626054",
-    "stt": 14,
-    "studentCode": "IFT626054",
-    "fullName": "Cao Chí Hiển",
-    "classCode": "DH27TH2",
-    "phone": "0964988861",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_15_IFT626055",
-    "stt": 15,
-    "studentCode": "IFT626055",
-    "fullName": "Trần Thanh Hiếu",
-    "classCode": "DH27TH2",
-    "phone": "0346943324",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_16_IFT626056",
-    "stt": 16,
-    "studentCode": "IFT626056",
-    "fullName": "Dương Trung Hiếu",
-    "classCode": "DH27TH2",
-    "phone": "0796957708",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_17_IFT626057",
-    "stt": 17,
-    "studentCode": "IFT626057",
-    "fullName": "Lê Huỳnh Minh Hiếu",
-    "classCode": "DH27TH2",
-    "phone": "0971977229",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_18_IFT626058",
-    "stt": 18,
-    "studentCode": "IFT626058",
-    "fullName": "Ngô Trung Hiếu",
-    "classCode": "DH27TH2",
-    "phone": "0975262332",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_19_IFT626059",
-    "stt": 19,
-    "studentCode": "IFT626059",
-    "fullName": "Trần Long Hồ",
-    "classCode": "DH27TH2",
-    "phone": "0392678311",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_20_IFT626062",
-    "stt": 20,
-    "studentCode": "IFT626062",
-    "fullName": "Trần Viết Thanh Hoàng",
-    "classCode": "DH27TH2",
-    "phone": "0787882106",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_21_IFT626063",
-    "stt": 21,
-    "studentCode": "IFT626063",
-    "fullName": "Nguyễn Thị Kim Hồng",
-    "classCode": "DH27TH2",
-    "phone": "0984261366",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_22_IFT626065",
-    "stt": 22,
-    "studentCode": "IFT626065",
-    "fullName": "Nguyễn Hưng",
-    "classCode": "DH27TH2",
-    "phone": "0931504804",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_23_IFT626073",
-    "stt": 23,
-    "studentCode": "IFT626073",
-    "fullName": "Lê Duy Khải",
-    "classCode": "DH27TH2",
-    "phone": "0358546872",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_24_IFT626077",
-    "stt": 24,
-    "studentCode": "IFT626077",
-    "fullName": "Phan Hồng Minh Khoa",
-    "classCode": "DH27TH2",
-    "phone": "0372062589",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_25_IFT626079",
-    "stt": 25,
-    "studentCode": "IFT626079",
-    "fullName": "Nguyễn Hoàng Anh Khoa",
-    "classCode": "DH27TH2",
-    "phone": "0877941530",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_26_IFT626084",
-    "stt": 26,
-    "studentCode": "IFT626084",
-    "fullName": "Dương Đăng Khôi",
-    "classCode": "DH27TH2",
-    "phone": "0334223929",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_27_IFT626089",
-    "stt": 27,
-    "studentCode": "IFT626089",
-    "fullName": "Huỳnh Gia Lạc",
-    "classCode": "DH27TH2",
-    "phone": "0946970980",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_28_IFT626095",
-    "stt": 28,
-    "studentCode": "IFT626095",
-    "fullName": "Trần Nguyên Lê",
-    "classCode": "DH27TH2",
-    "phone": "0982473008",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_29_IFT626097",
-    "stt": 29,
-    "studentCode": "IFT626097",
-    "fullName": "Viễn Ái Lộc",
-    "classCode": "DH27TH2",
-    "phone": "0796872462",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_30_IFT626103",
-    "stt": 30,
-    "studentCode": "IFT626103",
-    "fullName": "Nguyễn Phạm Diễm My",
-    "classCode": "DH27TH2",
-    "phone": "0932915492",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_31_IFT626105",
-    "stt": 31,
-    "studentCode": "IFT626105",
-    "fullName": "Chau Nếth",
-    "classCode": "DH27TH2",
-    "phone": "0397799154",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_32_IFT626106",
-    "stt": 32,
-    "studentCode": "IFT626106",
-    "fullName": "Lê Trọng Nghĩa",
-    "classCode": "DH27TH2",
-    "phone": "0393034609",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_33_IFT626108",
-    "stt": 33,
-    "studentCode": "IFT626108",
-    "fullName": "Lê Trọng Nghĩa",
-    "classCode": "DH27TH2",
-    "phone": "0923582203",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_34_IFT626116",
-    "stt": 34,
-    "studentCode": "IFT626116",
-    "fullName": "Nguyễn Thanh Nhã",
-    "classCode": "DH27TH2",
-    "phone": "0343384641",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_35_IFT626132",
-    "stt": 35,
-    "studentCode": "IFT626132",
-    "fullName": "Võ Hoàng Anh Pha",
-    "classCode": "DH27TH2",
-    "phone": "0932957898",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_36_IFT626135",
-    "stt": 36,
-    "studentCode": "IFT626135",
-    "fullName": "Nguyễn Trương Hoàng Phi",
-    "classCode": "DH27TH2",
-    "phone": "0916923533",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_37_IFT626136",
-    "stt": 37,
-    "studentCode": "IFT626136",
-    "fullName": "Nguyễn Hoàn Phú",
-    "classCode": "DH27TH2",
-    "phone": "0589474824",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_38_IFT626137",
-    "stt": 38,
-    "studentCode": "IFT626137",
-    "fullName": "Trần Trọng Phúc",
-    "classCode": "DH27TH2",
-    "phone": "0384326908",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_39_IFT626140",
-    "stt": 39,
-    "studentCode": "IFT626140",
-    "fullName": "Lê Hoàng Phúc",
-    "classCode": "DH27TH2",
-    "phone": "0378024942",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_40_IFT626143",
-    "stt": 40,
-    "studentCode": "IFT626143",
-    "fullName": "Nguyễn Phú Quí",
-    "classCode": "DH27TH2",
-    "phone": "0382138824",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_41_IFT626147",
-    "stt": 41,
-    "studentCode": "IFT626147",
-    "fullName": "Trịnh Trí Tài",
-    "classCode": "DH27TH2",
-    "phone": "0332710720",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_42_IFT626149",
-    "stt": 42,
-    "studentCode": "IFT626149",
-    "fullName": "Đỗ Ngọc Tải",
-    "classCode": "DH27TH2",
-    "phone": "0373992512",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_43_IFT626152",
-    "stt": 43,
-    "studentCode": "IFT626152",
-    "fullName": "Mai Duy Tâm",
-    "classCode": "DH27TH2",
-    "phone": "0799725106",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_44_IFT626157",
-    "stt": 44,
-    "studentCode": "IFT626157",
-    "fullName": "Phạm Hồng Thái",
-    "classCode": "DH27TH2",
-    "phone": "0388603411",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_45_IFT626158",
-    "stt": 45,
-    "studentCode": "IFT626158",
-    "fullName": "Phạm Nguyễn Quốc Thắng",
-    "classCode": "DH27TH2",
-    "phone": "0357733705",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_46_IFT626162",
-    "stt": 46,
-    "studentCode": "IFT626162",
-    "fullName": "Nguyễn Hoàng Thành",
-    "classCode": "DH27TH2",
-    "phone": "0388519492",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_47_IFT626165",
-    "stt": 47,
-    "studentCode": "IFT626165",
-    "fullName": "Nguyễn Minh Thảo",
-    "classCode": "DH27TH2",
-    "phone": "0393332370",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_48_IFT626167",
-    "stt": 48,
-    "studentCode": "IFT626167",
-    "fullName": "Nguyễn Phước Thế",
-    "classCode": "DH27TH2",
-    "phone": "0792181145",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_49_IFT626180",
-    "stt": 49,
-    "studentCode": "IFT626180",
-    "fullName": "Lê Đỗ Quốc Thuận",
-    "classCode": "DH27TH2",
-    "phone": "0333171740",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_50_IFT626187",
-    "stt": 50,
-    "studentCode": "IFT626187",
-    "fullName": "Nguyễn Trọng Tính",
-    "classCode": "DH27TH2",
-    "phone": "0345546752",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_51_IFT626194",
-    "stt": 51,
-    "studentCode": "IFT626194",
-    "fullName": "Nguyễn Hữu Trí",
-    "classCode": "DH27TH2",
-    "phone": "0917841049",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_52_IFT626195",
-    "stt": 52,
-    "studentCode": "IFT626195",
-    "fullName": "Nguyễn Hữu Đức Trí",
-    "classCode": "DH27TH2",
-    "phone": "0793310512",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_53_IFT626196",
-    "stt": 53,
-    "studentCode": "IFT626196",
-    "fullName": "Huỳnh Minh Triết",
-    "classCode": "DH27TH2",
-    "phone": "0375500650",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_54_IFT626197",
-    "stt": 54,
-    "studentCode": "IFT626197",
-    "fullName": "Trần Minh Triết",
-    "classCode": "DH27TH2",
-    "phone": "0348275997",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_55_IFT626199",
-    "stt": 55,
-    "studentCode": "IFT626199",
-    "fullName": "Lê Hoàng Trọng",
-    "classCode": "DH27TH2",
-    "phone": "0384001391",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_56_IFT626202",
-    "stt": 56,
-    "studentCode": "IFT626202",
-    "fullName": "Nguyễn Thanh Trúc",
-    "classCode": "DH27TH2",
-    "phone": "0362055891",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_57_IFT626205",
-    "stt": 57,
-    "studentCode": "IFT626205",
-    "fullName": "Võ Lê Thiên Trường",
-    "classCode": "DH27TH2",
-    "phone": "0357871208",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_58_IFT626208",
-    "stt": 58,
-    "studentCode": "IFT626208",
-    "fullName": "Trương Thanh Tú",
-    "classCode": "DH27TH2",
-    "phone": "0369194054",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_59_IFT626209",
-    "stt": 59,
-    "studentCode": "IFT626209",
-    "fullName": "Nguyễn Dương Tuấn",
-    "classCode": "DH27TH2",
-    "phone": "0373864035",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_60_IFT626211",
-    "stt": 60,
-    "studentCode": "IFT626211",
-    "fullName": "Trương Nguyễn Khải Tường",
-    "classCode": "DH27TH2",
-    "phone": "0916151936",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_61_IFT626215",
-    "stt": 61,
-    "studentCode": "IFT626215",
-    "fullName": "Nguyễn Thị Thanh Tuyền",
-    "classCode": "DH27TH2",
-    "phone": "0347324929",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_62_IFT626217",
-    "stt": 62,
-    "studentCode": "IFT626217",
-    "fullName": "Ngụy Ngữ Uyên",
-    "classCode": "DH27TH2",
-    "phone": "0707232154",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_63_IFT626218",
-    "stt": 63,
-    "studentCode": "IFT626218",
-    "fullName": "Nguyễn Kiều Vi",
-    "classCode": "DH27TH2",
-    "phone": "0397066404",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_64_IFT626219",
-    "stt": 64,
-    "studentCode": "IFT626219",
-    "fullName": "Nguyễn Thị Thúy Vi",
-    "classCode": "DH27TH2",
-    "phone": "0352113564",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_65_IFT626223",
-    "stt": 65,
-    "studentCode": "IFT626223",
-    "fullName": "Phan Trúc Việt",
-    "classCode": "DH27TH2",
-    "phone": "0968706274",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_66_IFT626225",
-    "stt": 66,
-    "studentCode": "IFT626225",
-    "fullName": "Nguyễn Phan Nguyên Vũ",
-    "classCode": "DH27TH2",
-    "phone": "0866740132",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  },
-  {
-    "id": "sv_67_IFT626230",
-    "stt": 67,
-    "studentCode": "IFT626230",
-    "fullName": "Cao Thị Bích Xuân",
-    "classCode": "DH27TH2",
-    "phone": "0918920298",
-    "paymentMethod": null,
-    "isTicked": false,
-    "paymentTime": null
-  }
-];
-
-    const STORAGE_KEY = 'book_sales_data_67_v1';
-    const SETTINGS_KEY = 'book_sales_settings_67_v1';
+    const STORAGE_KEY = 'book_sales_data_v3';
+    const SETTINGS_KEY = 'book_sales_settings_v3';
 
     let students = [];
     let settings = {
@@ -941,6 +282,7 @@
     };
     let currentFilter = 'all';
     let searchQuery = '';
+    let currentEditingStudentId = null;
 
     // Init
     window.addEventListener('DOMContentLoaded', () => {
@@ -955,16 +297,14 @@
         if (savedStudents) {
           students = JSON.parse(savedStudents);
         } else {
-          // Default to the 67 extracted students
-          students = JSON.parse(JSON.stringify(ORIGINAL_STUDENTS));
-          saveToStorage();
+          students = [];
         }
         if (savedSettings) {
           settings = JSON.parse(savedSettings);
         }
       } catch (err) {
         console.error('Lỗi đọc localStorage:', err);
-        students = JSON.parse(JSON.stringify(ORIGINAL_STUDENTS));
+        students = [];
       }
     }
 
@@ -975,8 +315,8 @@
         
         const tag = document.getElementById('save-tag');
         if (tag) {
-          tag.innerText = '✓ Đã lưu';
-          tag.className = 'text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-200';
+          tag.innerText = '✓ Đã lưu tự động';
+          tag.className = 'text-emerald-700 font-semibold';
         }
       } catch (err) {
         console.error('Lỗi ghi localStorage:', err);
@@ -1005,7 +345,9 @@
       const total = students.length;
       const cashCount = students.filter(s => s.paymentMethod === 'cash').length;
       const transferCount = students.filter(s => s.paymentMethod === 'transfer').length;
-      const unpaidCount = students.filter(s => !s.paymentMethod).length;
+      const unpaidReceivedCount = students.filter(s => s.paymentMethod === 'unpaid_received').length;
+      const otherCount = students.filter(s => s.paymentMethod === 'other').length;
+      const pendingCount = students.filter(s => !s.paymentMethod).length;
 
       const price = settings.pricePerBook || 0;
       const cashTotal = cashCount * price;
@@ -1018,10 +360,18 @@
 
       document.getElementById('count-cash').innerText = cashCount;
       document.getElementById('count-transfer').innerText = transferCount;
-      document.getElementById('count-all').innerText = total;
-      document.getElementById('count-unpaid').innerText = unpaidCount;
+      document.getElementById('count-unpaid-rec').innerText = unpaidReceivedCount;
+      document.getElementById('count-other').innerText = otherCount;
 
-      document.getElementById('price-display').innerText = settings.pricePerBook ? formatCurrency(settings.pricePerBook) : 'Đặt giá';
+      // Filter tab counts
+      document.getElementById('count-all').innerText = total;
+      document.getElementById('count-pending').innerText = pendingCount;
+      document.getElementById('count-cash-tab').innerText = cashCount;
+      document.getElementById('count-transfer-tab').innerText = transferCount;
+      document.getElementById('count-unpaid-tab').innerText = unpaidReceivedCount;
+      document.getElementById('count-other-tab').innerText = otherCount;
+
+      document.getElementById('price-display').innerText = settings.pricePerBook ? (formatCurrency(settings.pricePerBook)) : 'Đặt giá sách';
     }
 
     function setFilter(filterType) {
@@ -1058,19 +408,35 @@
 
     function renderList() {
       const container = document.getElementById('student-list');
+      const emptyState = document.getElementById('empty-state');
       const notFoundState = document.getElementById('not-found-state');
 
+      if (!students || students.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        notFoundState.classList.add('hidden');
+        updateStats();
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
       const filtered = students.filter(student => {
-        if (currentFilter === 'unpaid' && student.paymentMethod) return false;
+        // Tab Filter
+        if (currentFilter === 'pending' && student.paymentMethod) return false;
         if (currentFilter === 'cash' && student.paymentMethod !== 'cash') return false;
         if (currentFilter === 'transfer' && student.paymentMethod !== 'transfer') return false;
+        if (currentFilter === 'unpaid_received' && student.paymentMethod !== 'unpaid_received') return false;
+        if (currentFilter === 'other' && student.paymentMethod !== 'other') return false;
 
+        // Search Filter
         if (searchQuery) {
           const matchName = (student.fullName || '').toLowerCase().includes(searchQuery);
           const matchCode = (student.studentCode || '').toLowerCase().includes(searchQuery);
           const matchClass = (student.classCode || '').toLowerCase().includes(searchQuery);
+          const matchReason = (student.otherReason || '').toLowerCase().includes(searchQuery);
           const matchSTT = String(student.stt || '').includes(searchQuery);
-          if (!matchName && !matchCode && !matchClass && !matchSTT) return false;
+          if (!matchName && !matchCode && !matchClass && !matchReason && !matchSTT) return false;
         }
 
         return true;
@@ -1087,70 +453,94 @@
 
       let html = '';
       filtered.forEach((student) => {
-        const isPaidCash = student.paymentMethod === 'cash';
-        const isPaidTransfer = student.paymentMethod === 'transfer';
-        const isPaid = isPaidCash || isPaidTransfer;
-        const isTicked = student.isTicked || isPaid;
+        const isCash = student.paymentMethod === 'cash';
+        const isTransfer = student.paymentMethod === 'transfer';
+        const isUnpaidRec = student.paymentMethod === 'unpaid_received';
+        const isOther = student.paymentMethod === 'other';
 
+        // Card background styling
         let cardBg = 'bg-white border-slate-200';
-        if (isPaidCash) cardBg = 'bg-slate-50 border-slate-400';
-        else if (isPaidTransfer) cardBg = 'bg-slate-50 border-slate-400';
+        if (isCash) cardBg = 'bg-emerald-50/40 border-emerald-300';
+        else if (isTransfer) cardBg = 'bg-blue-50/40 border-blue-300';
+        else if (isUnpaidRec) cardBg = 'bg-amber-50/40 border-amber-300';
+        else if (isOther) cardBg = 'bg-slate-50 border-slate-400';
 
         html += `
-          <div class="p-2 rounded-lg border ${cardBg} transition-all flex flex-col gap-1.5">
-            <!-- Top line: Checkbox + Name + MSSV + Class -->
+          <div class="p-2 rounded-xl border ${cardBg} shadow-2xs transition-all flex flex-col gap-1.5">
+            <!-- Row 1: STT, Name, MSSV, Class, Time -->
             <div class="flex items-center justify-between gap-1.5">
-              <div class="flex items-center gap-2 flex-1 min-w-0">
-                <!-- Checkbox -->
-                <button 
-                  onclick="toggleTicked('${student.id}')"
-                  class="touch-btn w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
-                    isTicked ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-300 text-transparent'
-                  }"
-                >
-                  <svg class="w-3 h-3 fill-current" viewBox="0 0 20 20">
-                    <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
-                  </svg>
-                </button>
-
-                <!-- Student details -->
-                <div class="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
-                  <span class="text-[10px] font-bold text-slate-400 w-4">${student.stt || '-'}</span>
-                  <span class="text-xs font-bold text-slate-900 truncate">${escapeHtml(student.fullName || 'Không rõ tên')}</span>
-                  <span class="text-[10px] font-mono text-slate-500 bg-slate-100 px-1 rounded">${escapeHtml(student.studentCode || '')}</span>
-                  <span class="text-[10px] text-slate-500">${escapeHtml(student.classCode || '')}</span>
-                </div>
+              <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                <span class="text-[10px] font-bold text-slate-400 w-5 shrink-0">#${student.stt || '-'}</span>
+                <span class="text-xs sm:text-sm font-bold text-slate-900 truncate">${escapeHtml(student.fullName || 'Không rõ tên')}</span>
+                <span class="text-[10px] font-mono text-slate-600 bg-slate-100 px-1 py-0.2 rounded shrink-0">${escapeHtml(student.studentCode || '')}</span>
+                <span class="text-[10px] text-slate-500 shrink-0">${escapeHtml(student.classCode || '')}</span>
               </div>
 
               ${student.paymentTime ? `<span class="text-[9px] text-slate-400 font-medium shrink-0">${student.paymentTime}</span>` : ''}
             </div>
 
-            <!-- Bottom line: 2 Quick Payment Click Buttons -->
-            <div class="grid grid-cols-2 gap-1 pl-7">
-              <!-- Tiền mặt -->
+            <!-- Custom Reason Badge if selected Other -->
+            ${isOther ? `
+              <div class="flex items-center justify-between bg-slate-100 px-2 py-1 rounded-lg text-xs text-slate-700">
+                <span class="truncate"><b>Lý do:</b> ${escapeHtml(student.otherReason || 'Chưa ghi rõ')}</span>
+                <button onclick="openOtherModal('${student.id}')" class="text-[10px] text-blue-600 font-semibold hover:underline shrink-0 ml-2">Sửa</button>
+              </div>
+            ` : ''}
+
+            <!-- Row 2: 4 Option Buttons (Tiền mặt | CK | Nhận chưa trả | Khác) -->
+            <div class="grid grid-cols-4 gap-1 pt-0.5">
+              <!-- 1. Tiền mặt -->
               <button 
-                onclick="setPaymentMethod('${student.id}', 'cash')"
-                class="touch-btn py-1 px-1.5 rounded text-[11px] font-semibold transition-all flex items-center justify-center gap-1 border ${
-                  isPaidCash 
-                    ? 'bg-slate-900 text-white border-slate-900' 
+                onclick="setPaymentOption('${student.id}', 'cash')"
+                class="touch-btn py-1.5 px-1 rounded-lg text-[10.5px] font-bold transition-all flex items-center justify-center gap-0.5 border ${
+                  isCash 
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs' 
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:bg-slate-100'
                 }"
               >
-                <span>💵 Tiền mặt</span>
-                ${isPaidCash ? '<span>✓</span>' : ''}
+                <span>💵 TM</span>
+                ${isCash ? '<span class="text-[9px]">✓</span>' : ''}
               </button>
 
-              <!-- Chuyển khoản -->
+              <!-- 2. Chuyển khoản -->
               <button 
-                onclick="setPaymentMethod('${student.id}', 'transfer')"
-                class="touch-btn py-1 px-1.5 rounded text-[11px] font-semibold transition-all flex items-center justify-center gap-1 border ${
-                  isPaidTransfer 
-                    ? 'bg-slate-900 text-white border-slate-900' 
+                onclick="setPaymentOption('${student.id}', 'transfer')"
+                class="touch-btn py-1.5 px-1 rounded-lg text-[10.5px] font-bold transition-all flex items-center justify-center gap-0.5 border ${
+                  isTransfer 
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs' 
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:bg-slate-100'
                 }"
               >
-                <span>💳 Chuyển khoản</span>
-                ${isPaidTransfer ? '<span>✓</span>' : ''}
+                <span>💳 CK</span>
+                ${isTransfer ? '<span class="text-[9px]">✓</span>' : ''}
+              </button>
+
+              <!-- 3. Nhận chưa trả -->
+              <button 
+                onclick="setPaymentOption('${student.id}', 'unpaid_received')"
+                class="touch-btn py-1.5 px-1 rounded-lg text-[10.5px] font-bold transition-all flex items-center justify-center gap-0.5 border ${
+                  isUnpaidRec 
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs' 
+                    : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50 active:bg-amber-100'
+                }"
+                title="Đã nhận sách nhưng chưa thanh toán"
+              >
+                <span>⏳ Nhận chưa trả</span>
+                ${isUnpaidRec ? '<span class="text-[9px]">✓</span>' : ''}
+              </button>
+
+              <!-- 4. Khác -->
+              <button 
+                onclick="handleOtherClick('${student.id}')"
+                class="touch-btn py-1.5 px-1 rounded-lg text-[10.5px] font-bold transition-all flex items-center justify-center gap-0.5 border ${
+                  isOther 
+                    ? 'bg-slate-700 text-white border-slate-700 shadow-xs' 
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 active:bg-slate-100'
+                }"
+                title="Lý do khác: Không mua, đã có sách..."
+              >
+                <span>✏️ Khác</span>
+                ${isOther ? '<span class="text-[9px]">✓</span>' : ''}
               </button>
             </div>
           </div>
@@ -1161,28 +551,91 @@
       updateStats();
     }
 
-    function toggleTicked(id) {
+    // Toggle Payment Option
+    function setPaymentOption(id, option) {
       const student = students.find(s => s.id === id);
       if (!student) return;
-      student.isTicked = !student.isTicked;
+
+      if (student.paymentMethod === option) {
+        // Toggle off
+        student.paymentMethod = null;
+        student.paymentTime = null;
+        student.otherReason = null;
+      } else {
+        student.paymentMethod = option;
+        student.paymentTime = getNowFormatted();
+        student.otherReason = null;
+      }
+
       saveToStorage();
       renderList();
     }
 
-    function setPaymentMethod(id, method) {
+    function handleOtherClick(id) {
       const student = students.find(s => s.id === id);
       if (!student) return;
 
-      if (student.paymentMethod === method) {
+      if (student.paymentMethod === 'other') {
+        // Toggle off if clicked again
         student.paymentMethod = null;
         student.paymentTime = null;
+        student.otherReason = null;
+        saveToStorage();
+        renderList();
       } else {
-        student.paymentMethod = method;
-        student.isTicked = true;
-        student.paymentTime = getNowFormatted();
+        openOtherModal(id);
       }
+    }
+
+    // Modal Other Reason
+    function openOtherModal(id) {
+      currentEditingStudentId = id;
+      const student = students.find(s => s.id === id);
+      if (!student) return;
+
+      document.getElementById('other-modal-student').innerText = `${student.fullName} (${student.studentCode})`;
+      document.getElementById('other-reason-input').value = student.otherReason || '';
+      document.getElementById('other-modal').classList.remove('hidden');
+      setTimeout(() => {
+        document.getElementById('other-reason-input').focus();
+      }, 50);
+    }
+
+    function closeOtherModal() {
+      document.getElementById('other-modal').classList.add('hidden');
+      currentEditingStudentId = null;
+    }
+
+    function setQuickReason(text) {
+      document.getElementById('other-reason-input').value = text;
+    }
+
+    function saveOtherReason() {
+      if (!currentEditingStudentId) return;
+      const student = students.find(s => s.id === currentEditingStudentId);
+      if (!student) return;
+
+      const reason = document.getElementById('other-reason-input').value.trim() || 'Không mua';
+      student.paymentMethod = 'other';
+      student.otherReason = reason;
+      student.paymentTime = getNowFormatted();
 
       saveToStorage();
+      closeOtherModal();
+      renderList();
+    }
+
+    function clearOtherReason() {
+      if (!currentEditingStudentId) return;
+      const student = students.find(s => s.id === currentEditingStudentId);
+      if (!student) return;
+
+      student.paymentMethod = null;
+      student.otherReason = null;
+      student.paymentTime = null;
+
+      saveToStorage();
+      closeOtherModal();
       renderList();
     }
 
@@ -1235,56 +688,50 @@
       updateStats();
     }
 
-    // Modal Settings
-    function openImportModal() {
-      document.getElementById('import-modal').classList.remove('hidden');
+    // Modal Upload PDF
+    function openUploadModal() {
+      document.getElementById('upload-modal').classList.remove('hidden');
     }
 
-    function closeImportModal() {
-      document.getElementById('import-modal').classList.add('hidden');
+    function closeUploadModal() {
+      document.getElementById('upload-modal').classList.add('hidden');
     }
 
-    function resetToOriginalPDF() {
-      if (confirm('Bạn có muốn nạp lại danh sách 67 sinh viên gốc từ file PDF không? (Dữ liệu tick trước đó sẽ được làm mới)')) {
-        students = JSON.parse(JSON.stringify(ORIGINAL_STUDENTS));
-        saveToStorage();
-        renderApp();
-        closeImportModal();
-        alert('Đã nạp thành công 67 sinh viên!');
-      }
-    }
-
-    function clearAllPaymentMarks() {
-      if (confirm('Bạn có chắc muốn xóa toàn bộ đánh dấu tick và tiền đã thu không?')) {
-        students.forEach(s => {
-          s.paymentMethod = null;
-          s.isTicked = false;
-          s.paymentTime = null;
-        });
-        saveToStorage();
-        renderApp();
-        closeImportModal();
-      }
-    }
-
-    // Excel Export
+    // ================= EXPORT TO EXCEL =================
+    // Cột ghi nhận thanh toán:
+    // 1. "Đã thanh toán" (Tiền mặt / Chuyển khoản)
+    // 2. "Chưa thanh toán" (Nhận chưa trả / Chưa xử lý)
+    // 3. Lý do trong ô Khác (Ví dụ: "Đã có sách", "Không mua",...)
+    // Cột Thanh toán: "Tiền mặt" hoặc "Chuyển khoản"
     function exportToExcel() {
       if (!students || students.length === 0) {
-        alert('Danh sách đang trống!');
+        alert('Danh sách đang trống, hãy tải file PDF lên trước!');
         return;
       }
 
       const price = settings.pricePerBook || 0;
 
       const dataRows = students.map((s, idx) => {
-        let hinhThuc = 'Chưa thu';
+        let ghiNhanThanhToan = 'Chưa thanh toán';
+        let cachThanhToan = '';
         let soTienStr = '0';
+
         if (s.paymentMethod === 'cash') {
-          hinhThuc = 'Tiền mặt';
+          ghiNhanThanhToan = 'Đã thanh toán';
+          cachThanhToan = 'Tiền mặt';
           soTienStr = formatNumberWithDots(price);
         } else if (s.paymentMethod === 'transfer') {
-          hinhThuc = 'Chuyển khoản';
+          ghiNhanThanhToan = 'Đã thanh toán';
+          cachThanhToan = 'Chuyển khoản';
           soTienStr = formatNumberWithDots(price);
+        } else if (s.paymentMethod === 'unpaid_received') {
+          ghiNhanThanhToan = 'Chưa thanh toán (Đã nhận)';
+          cachThanhToan = '';
+          soTienStr = '0';
+        } else if (s.paymentMethod === 'other') {
+          ghiNhanThanhToan = s.otherReason || 'Khác';
+          cachThanhToan = '';
+          soTienStr = '0';
         }
 
         return {
@@ -1292,8 +739,8 @@
           'Mã Sinh Viên': s.studentCode || '',
           'Họ và Tên': s.fullName || '',
           'Mã Lớp': s.classCode || '',
-          'Trạng Thái Tick': (s.isTicked || s.paymentMethod) ? 'Đã nhận' : 'Chưa',
-          'Hình Thức Thanh Toán': hinhThuc,
+          'Ghi nhận mua sách': ghiNhanThanhToan,
+          'Thanh toán': cachThanhToan,
           'Số Tiền (VNĐ)': soTienStr,
           'Thời Gian Ghi Nhận': s.paymentTime || ''
         };
@@ -1301,38 +748,162 @@
 
       const cashCount = students.filter(s => s.paymentMethod === 'cash').length;
       const transferCount = students.filter(s => s.paymentMethod === 'transfer').length;
-      const totalCollected = (cashCount + transferCount) * price;
+      const unpaidRecCount = students.filter(s => s.paymentMethod === 'unpaid_received').length;
+      const otherCount = students.filter(s => s.paymentMethod === 'other').length;
+      const totalMoney = (cashCount + transferCount) * price;
 
+      // Summary Row
       dataRows.push({});
       dataRows.push({
         'STT': 'TỔNG KẾT',
         'Mã Sinh Viên': '',
         'Họ và Tên': `Tổng: ${students.length} sinh viên`,
         'Mã Lớp': '',
-        'Trạng Thái Tick': `Tiền mặt: ${cashCount} | CK: ${transferCount}`,
-        'Hình Thức Thanh Toán': `Tổng đã thu: ${formatNumberWithDots(totalCollected)} VNĐ`,
-        'Số Tiền (VNĐ)': formatNumberWithDots(totalCollected),
+        'Ghi nhận mua sách': `Đã thu: ${cashCount + transferCount} | Nhận chưa trả: ${unpaidRecCount} | Khác: ${otherCount}`,
+        'Thanh toán': `Tiền mặt: ${cashCount} | CK: ${transferCount}`,
+        'Số Tiền (VNĐ)': formatNumberWithDots(totalMoney),
         'Thời Gian Ghi Nhận': `Xuất lúc: ${getNowFormatted()}`
       });
 
       const worksheet = XLSX.utils.json_to_sheet(dataRows);
       worksheet['!cols'] = [
-        { wch: 6 },
-        { wch: 15 },
-        { wch: 25 },
-        { wch: 14 },
-        { wch: 16 },
-        { wch: 20 },
-        { wch: 16 },
-        { wch: 20 }
+        { wch: 6 },  // STT
+        { wch: 15 }, // MSSV
+        { wch: 25 }, // Ho Ten
+        { wch: 14 }, // Lop
+        { wch: 26 }, // Ghi nhan mua sach
+        { wch: 18 }, // Thanh toan
+        { wch: 16 }, // So tien
+        { wch: 20 }  // Thoi gian
       ];
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Ban_Sach');
 
       const now = new Date();
-      const filename = `Danh_Sach_Ban_Sach_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`;
+      const filename = `Danh_Sach_Ban_Sach_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.xlsx`;
       XLSX.writeFile(workbook, filename);
+    }
+
+    // ================= PARSE PDF IN BROWSER =================
+    async function handlePDFUpload(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const modalLoading = document.getElementById('modal-pdf-loading');
+      const emptyLoading = document.getElementById('empty-loading');
+      if (modalLoading) modalLoading.classList.remove('hidden');
+      if (emptyLoading) emptyLoading.classList.remove('hidden');
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let fullLines = [];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          
+          const lineMap = new Map();
+          textContent.items.forEach(item => {
+            const y = Math.round(item.transform[5]);
+            if (!lineMap.has(y)) lineMap.set(y, []);
+            lineMap.get(y).push({ x: item.transform[4], text: item.str });
+          });
+
+          const sortedYs = Array.from(lineMap.keys()).sort((a, b) => b - a);
+          sortedYs.forEach(y => {
+            const items = lineMap.get(y).sort((a, b) => a.x - b.x);
+            const lineText = items.map(i => i.text.trim()).filter(Boolean).join('   ');
+            if (lineText.trim()) fullLines.push(lineText);
+          });
+        }
+
+        parseExtractedLines(fullLines);
+        closeUploadModal();
+        alert(`Đã trích xuất thành công ${students.length} sinh viên từ file PDF!`);
+      } catch (err) {
+        console.error('PDF error:', err);
+        alert('Lỗi khi đọc file PDF: ' + err.message);
+      } finally {
+        if (modalLoading) modalLoading.classList.add('hidden');
+        if (emptyLoading) emptyLoading.classList.add('hidden');
+        input.value = '';
+      }
+    }
+
+    function parseExtractedLines(lines) {
+      const parsed = [];
+      let autoSTT = 1;
+
+      lines.forEach(line => {
+        const clean = line.trim();
+        if (!clean) return;
+
+        const lower = clean.toLowerCase();
+        if (lower.includes('họ và tên') || lower.includes('mã sinh viên') || lower.includes('danh sách') || lower.includes('trang') || lower.includes('stt') || lower.includes('chữ ký') || lower.includes('sđt liên lạc')) {
+          return;
+        }
+
+        const tokens = clean.split(/\s{2,}|\t/).map(t => t.trim()).filter(Boolean);
+
+        if (tokens.length >= 3) {
+          let stt = autoSTT;
+          let code = '';
+          let name = '';
+          let classCode = '';
+
+          if (/^\d+$/.test(tokens[0]) && tokens.length >= 4) {
+            stt = parseInt(tokens[0], 10);
+            code = tokens[1];
+            if (tokens.length >= 5) {
+              name = tokens.slice(2, tokens.length - 1).join(' ');
+              classCode = tokens[tokens.length - 1];
+            } else {
+              name = tokens[2];
+              classCode = tokens[3];
+            }
+          } else {
+            code = tokens[0];
+            name = tokens[1];
+            classCode = tokens[2] || '';
+          }
+
+          parsed.push({
+            id: 'sv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            stt: stt,
+            studentCode: code,
+            fullName: name,
+            classCode: classCode,
+            paymentMethod: null,
+            otherReason: null,
+            paymentTime: null
+          });
+          autoSTT++;
+        } else {
+          // Space fallback
+          const match = clean.match(/^(\d+)?\s*([0-9A-Za-z]{6,15})\s+(.+?)\s+([0-9A-Za-z_-]{4,20})$/);
+          if (match) {
+            parsed.push({
+              id: 'sv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+              stt: match[1] ? parseInt(match[1], 10) : autoSTT++,
+              studentCode: match[2],
+              fullName: match[3],
+              classCode: match[4],
+              paymentMethod: null,
+              otherReason: null,
+              paymentTime: null
+            });
+          }
+        }
+      });
+
+      if (parsed.length > 0) {
+        students = parsed;
+        saveToStorage();
+        renderApp();
+      }
     }
 
     function backupJSON() {
@@ -1357,7 +928,7 @@
             if (data.settings) settings = data.settings;
             saveToStorage();
             renderApp();
-            closeImportModal();
+            closeUploadModal();
             alert('Khôi phục dữ liệu thành công!');
           }
         } catch (err) {
@@ -1365,6 +936,15 @@
         }
       };
       reader.readAsText(file);
+    }
+
+    function confirmResetAll() {
+      if (confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu hiện tại không?')) {
+        students = [];
+        saveToStorage();
+        renderApp();
+        closeUploadModal();
+      }
     }
   </script>
 </body>
