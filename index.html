@@ -806,19 +806,19 @@
 
           // Sort items: Top to bottom, then Left to right
           items.sort((a, b) => {
-            if (Math.abs(a.y - b.y) > 3.5) {
+            if (Math.abs(a.y - b.y) > 8) {
               return b.y - a.y;
             }
             return a.x - b.x;
           });
 
-          // Cluster into rows with 3.5px threshold
+          // Cluster into rows with 8px threshold (wide enough to capture SĐT + CCCD cols)
           const rows = [];
           let currentRow = [];
           let currentY = null;
 
           items.forEach(it => {
-            if (currentY === null || Math.abs(it.y - currentY) <= 3.5) {
+            if (currentY === null || Math.abs(it.y - currentY) <= 8) {
               currentRow.push(it);
               if (currentY === null) currentY = it.y;
             } else {
@@ -834,12 +834,24 @@
             rows.push(currentRow.map(r => r.text).join(' '));
           }
 
-          allExtractedLines.push(...rows);
+          // Post-merge: nếu dòng chỉ có số (SĐT/CCCD tách ra), ghép vào dòng trước
+          const mergedRows = [];
+          rows.forEach(row => {
+            const toks = row.trim().split(/\s+/);
+            const allNumbers = toks.every(t => /^\d+$/.test(t));
+            if (allNumbers && mergedRows.length > 0) {
+              mergedRows[mergedRows.length - 1] += ' ' + row.trim();
+            } else {
+              mergedRows.push(row);
+            }
+          });
+
+          allExtractedLines.push(...mergedRows);
         }
 
         parseExtractedLines(allExtractedLines);
         closeUploadModal();
-        alert(`Đã trích xuất chính xác ${students.length} sinh viên từ file PDF!`);
+        alert(`Đã trích xuất ${students.length} sinh viên từ file PDF!`);
       } catch (err) {
         console.error('PDF error:', err);
         alert('Lỗi khi đọc file PDF: ' + err.message);
